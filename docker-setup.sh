@@ -143,7 +143,7 @@ initialize_database() {
     sleep 5
     
     # Run database setup
-    python database_setup.py
+    python database/database_setup.py
     
     print_success "Database initialized successfully"
 }

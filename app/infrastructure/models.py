@@ -41,4 +41,14 @@ class RefreshTokenModel(Base):
     token = Column(String(500), primary_key=True, index=True)
     username = Column(String(50), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    expires_at = Column(DateTime(timezone=True), nullable=False) 
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+class PosterModel(Base):
+    """Poster database model (image + message)"""
+    __tablename__ = "posters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    image_path = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now()) 

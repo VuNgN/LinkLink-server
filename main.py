@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 import asyncio
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.infrastructure.database import init_db, close_db
@@ -132,6 +133,9 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api/v1")
+
+# Serve the admin directory at /admin
+app.mount("/admin", StaticFiles(directory="admin"), name="admin")
 
 def custom_openapi():
     """Custom OpenAPI schema with enhanced documentation"""
