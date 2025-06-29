@@ -408,6 +408,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **SSH Security Guide**: [docs/SSH_SECURITY_GUIDE.md](docs/SSH_SECURITY_GUIDE.md)
 - **GitHub SSH Setup**: [docs/GITHUB_SSH_SETUP.md](docs/GITHUB_SSH_SETUP.md)
 - **Persistent GitHub Auth**: [docs/PERSISTENT_GITHUB_AUTH.md](docs/PERSISTENT_GITHUB_AUTH.md)
+- **GitHub Auth Summary**: [docs/GITHUB_AUTH_SUMMARY.md](docs/GITHUB_AUTH_SUMMARY.md)
+- **GitHub Push Checklist**: [docs/GITHUB_PUSH_CHECKLIST.md](docs/GITHUB_PUSH_CHECKLIST.md)
 - **Issues**: [GitHub Issues](../../issues)
 - **Discussions**: [GitHub Discussions](../../discussions)
 
