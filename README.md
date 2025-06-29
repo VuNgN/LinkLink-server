@@ -405,6 +405,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Authentication Testing**: [docs/AUTHENTICATION_TESTING.md](docs/AUTHENTICATION_TESTING.md)
 - **Frontend API Guide**: [docs/API_GUIDE_FRONTEND.md](docs/API_GUIDE_FRONTEND.md)
 - **Swagger Documentation**: [docs/SWAGGER_DOCUMENTATION.md](docs/SWAGGER_DOCUMENTATION.md)
+- **SSH Security Guide**: [docs/SSH_SECURITY_GUIDE.md](docs/SSH_SECURITY_GUIDE.md)
+- **GitHub SSH Setup**: [docs/GITHUB_SSH_SETUP.md](docs/GITHUB_SSH_SETUP.md)
+- **Persistent GitHub Auth**: [docs/PERSISTENT_GITHUB_AUTH.md](docs/PERSISTENT_GITHUB_AUTH.md)
 - **Issues**: [GitHub Issues](../../issues)
 - **Discussions**: [GitHub Discussions](../../discussions)
 

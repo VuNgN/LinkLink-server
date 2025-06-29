@@ -5,6 +5,20 @@
 .env.staging
 secrets/
 
+# SSH Keys and Configuration (Security)
+.ssh/
+*.pem
+*.key
+*.pub
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+known_hosts
+known_hosts.old
+ssh_config
+ssh_config.backup
+
 # Database files and data
 docker/postgres/data/
 docker/pgadmin/data/
