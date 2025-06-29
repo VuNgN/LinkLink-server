@@ -35,7 +35,7 @@ print_error() {
 # Check if Docker is installed
 check_docker() {
     print_status "Checking Docker installation..."
-    if ! command docker -v &> /dev/null; then
+    if ! command -v docker &> /dev/null; then
         print_error "Docker is not installed. Please install Docker first."
         exit 1
     fi

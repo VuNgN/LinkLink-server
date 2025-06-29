@@ -147,20 +147,13 @@ def custom_openapi():
     
     # Add security schemes
     openapi_schema["components"]["securitySchemes"] = {
-        "BearerAuth": {
+        "HTTPBearer": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
             "description": "Enter your JWT token in the format: Bearer <token>"
         }
     }
-    
-    # Add global security requirement
-    openapi_schema["security"] = [
-        {
-            "BearerAuth": []
-        }
-    ]
     
     # Add response examples
     openapi_schema["components"]["examples"] = {

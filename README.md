@@ -410,6 +410,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Persistent GitHub Auth**: [docs/PERSISTENT_GITHUB_AUTH.md](docs/PERSISTENT_GITHUB_AUTH.md)
 - **GitHub Auth Summary**: [docs/GITHUB_AUTH_SUMMARY.md](docs/GITHUB_AUTH_SUMMARY.md)
 - **GitHub Push Checklist**: [docs/GITHUB_PUSH_CHECKLIST.md](docs/GITHUB_PUSH_CHECKLIST.md)
+- **Secure Registration Guide**: [docs/SECURE_REGISTRATION_GUIDE.md](docs/SECURE_REGISTRATION_GUIDE.md)
 - **Issues**: [GitHub Issues](../../issues)
 - **Discussions**: [GitHub Discussions](../../discussions)
 
