@@ -7,8 +7,8 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 
-from ..core.interfaces import UserRepository, ImageRepository, TokenRepository
-from ..core.entities import User, Image
+from ..core.interfaces import UserRepository, ImageRepository, TokenRepository, RefreshTokenRepository
+from ..core.entities import User, Image, UserStatus
 from .models import UserModel, ImageModel, RefreshTokenModel
 
 class PostgreSQLUserRepository(UserRepository):
@@ -21,10 +21,15 @@ class PostgreSQLUserRepository(UserRepository):
         """Create a new user"""
         db_user = UserModel(
             username=user.username,
+            email=user.email,
             hashed_password=user.hashed_password,
             is_active=user.is_active,
+            is_admin=user.is_admin,
+            status=user.status.value,
             created_at=user.created_at,
-            updated_at=user.updated_at
+            updated_at=user.updated_at,
+            approved_at=user.approved_at,
+            approved_by=user.approved_by
         )
         self.session.add(db_user)
         await self.session.commit()
@@ -32,10 +37,15 @@ class PostgreSQLUserRepository(UserRepository):
         
         return User(
             username=db_user.username,
+            email=db_user.email,
             hashed_password=db_user.hashed_password,
             is_active=db_user.is_active,
+            is_admin=db_user.is_admin,
+            status=UserStatus(db_user.status),
             created_at=db_user.created_at,
-            updated_at=db_user.updated_at
+            updated_at=db_user.updated_at,
+            approved_at=db_user.approved_at,
+            approved_by=db_user.approved_by
         )
     
     async def get_by_username(self, username: str) -> Optional[User]:
@@ -50,11 +60,62 @@ class PostgreSQLUserRepository(UserRepository):
         
         return User(
             username=db_user.username,
+            email=db_user.email,
             hashed_password=db_user.hashed_password,
             is_active=db_user.is_active,
+            is_admin=db_user.is_admin,
+            status=UserStatus(db_user.status),
             created_at=db_user.created_at,
-            updated_at=db_user.updated_at
+            updated_at=db_user.updated_at,
+            approved_at=db_user.approved_at,
+            approved_by=db_user.approved_by
         )
+    
+    async def get_by_email(self, email: str) -> Optional[User]:
+        """Get user by email"""
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.email == email)
+        )
+        db_user = result.scalar_one_or_none()
+        
+        if not db_user:
+            return None
+        
+        return User(
+            username=db_user.username,
+            email=db_user.email,
+            hashed_password=db_user.hashed_password,
+            is_active=db_user.is_active,
+            is_admin=db_user.is_admin,
+            status=UserStatus(db_user.status),
+            created_at=db_user.created_at,
+            updated_at=db_user.updated_at,
+            approved_at=db_user.approved_at,
+            approved_by=db_user.approved_by
+        )
+    
+    async def get_by_status(self, status: UserStatus) -> List[User]:
+        """Get users by status"""
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.status == status.value)
+        )
+        db_users = result.scalars().all()
+        
+        return [
+            User(
+                username=user.username,
+                email=user.email,
+                hashed_password=user.hashed_password,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
+                status=UserStatus(user.status),
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+                approved_at=user.approved_at,
+                approved_by=user.approved_by
+            )
+            for user in db_users
+        ]
     
     async def update(self, user: User) -> User:
         """Update user"""
@@ -66,19 +127,29 @@ class PostgreSQLUserRepository(UserRepository):
         if not db_user:
             raise ValueError("User not found")
         
+        db_user.email = user.email
         db_user.hashed_password = user.hashed_password
         db_user.is_active = user.is_active
+        db_user.is_admin = user.is_admin
+        db_user.status = user.status.value
         db_user.updated_at = datetime.utcnow()
+        db_user.approved_at = user.approved_at
+        db_user.approved_by = user.approved_by
         
         await self.session.commit()
         await self.session.refresh(db_user)
         
         return User(
             username=db_user.username,
+            email=db_user.email,
             hashed_password=db_user.hashed_password,
             is_active=db_user.is_active,
+            is_admin=db_user.is_admin,
+            status=UserStatus(db_user.status),
             created_at=db_user.created_at,
-            updated_at=db_user.updated_at
+            updated_at=db_user.updated_at,
+            approved_at=db_user.approved_at,
+            approved_by=db_user.approved_by
         )
     
     async def delete(self, username: str) -> bool:
@@ -215,4 +286,36 @@ class PostgreSQLTokenRepository(TokenRepository):
             delete(RefreshTokenModel).where(RefreshTokenModel.expires_at <= datetime.utcnow())
         )
         await self.session.commit()
-        return result.rowcount 
+        return result.rowcount
+
+class PostgreSQLRefreshTokenRepository(RefreshTokenRepository):
+    """PostgreSQL refresh token repository implementation"""
+    
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create(self, token: str, username: str, expires_at: datetime) -> bool:
+        """Create a new refresh token"""
+        db_token = RefreshTokenModel(
+            token=token,
+            username=username,
+            expires_at=expires_at
+        )
+        self.session.add(db_token)
+        await self.session.commit()
+        return True
+    
+    async def get_by_token(self, token: str):
+        """Get refresh token by token string"""
+        result = await self.session.execute(
+            select(RefreshTokenModel).where(RefreshTokenModel.token == token)
+        )
+        return result.scalar_one_or_none()
+    
+    async def delete_by_token(self, token: str) -> bool:
+        """Delete refresh token by token string"""
+        result = await self.session.execute(
+            delete(RefreshTokenModel).where(RefreshTokenModel.token == token)
+        )
+        await self.session.commit()
+        return result.rowcount > 0 

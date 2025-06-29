@@ -3,7 +3,8 @@ Repository interfaces - Abstract base classes for data access
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from .entities import User, Image, Token
+from datetime import datetime
+from .entities import User, Image, Token, UserStatus
 
 class UserRepository(ABC):
     """Abstract user repository interface"""
@@ -16,6 +17,16 @@ class UserRepository(ABC):
     @abstractmethod
     async def get_by_username(self, username: str) -> Optional[User]:
         """Get user by username"""
+        pass
+    
+    @abstractmethod
+    async def get_by_email(self, email: str) -> Optional[User]:
+        """Get user by email"""
+        pass
+    
+    @abstractmethod
+    async def get_by_status(self, status: UserStatus) -> List[User]:
+        """Get users by status (pending, approved, rejected)"""
         pass
     
     @abstractmethod
@@ -85,4 +96,22 @@ class FileStorage(ABC):
     @abstractmethod
     async def file_exists(self, file_path: str) -> bool:
         """Check if file exists"""
+        pass
+
+class RefreshTokenRepository(ABC):
+    """Abstract refresh token repository interface"""
+    
+    @abstractmethod
+    async def create(self, token: str, username: str, expires_at: datetime) -> bool:
+        """Create a new refresh token"""
+        pass
+    
+    @abstractmethod
+    async def get_by_token(self, token: str):
+        """Get refresh token by token string"""
+        pass
+    
+    @abstractmethod
+    async def delete_by_token(self, token: str) -> bool:
+        """Delete refresh token by token string"""
         pass 

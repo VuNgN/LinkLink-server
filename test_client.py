@@ -179,7 +179,7 @@ def main():
         
     except requests.exceptions.ConnectionError:
         print(f"\n❌ Could not connect to server at {BASE_URL}")
-        print("Make sure the server is running with: python main_clean.py")
+        print("Make sure the server is running with: python main.py")
     except Exception as e:
         print(f"\n❌ Test failed with error: {str(e)}")
 
