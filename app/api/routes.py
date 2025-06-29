@@ -1,16 +1,21 @@
 """
 API routes - Presentation layer
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Security
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Security, Form
 from typing import List
 from datetime import datetime
+import os, shutil
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc, update, delete as sqlalchemy_delete
 
 from ..core.services import AuthService, ImageService
 from ..core.entities import (
     User, UserCreate, UserLogin, Token, ImageInfo, RefreshTokenRequest, 
-    LogoutRequest, UserRegistrationResponse, AdminApprovalRequest, PendingUserInfo
+    LogoutRequest, UserRegistrationResponse, AdminApprovalRequest, PendingUserInfo, Poster
 )
 from .dependencies import get_auth_service, get_image_service, get_current_user, get_current_admin_user
+from app.infrastructure.models import PosterModel
+from app.infrastructure.database import get_db_session
 
 router = APIRouter()
 
@@ -729,4 +734,93 @@ async def delete_image(
     if not success:
         raise HTTPException(status_code=404, detail="Image not found")
     
-    return {"message": "Image deleted successfully"} 
+    return {"message": "Image deleted successfully"}
+
+@router.post("/posters/", response_model=Poster, tags=["Posters"], summary="Create a poster (image + message)", dependencies=[Security(get_current_user)])
+async def create_poster(
+    message: str = Form(..., description="Message for the poster"),
+    image: UploadFile = File(..., description="Image file for the poster"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    # Save the image
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    image_filename = f"{current_user.username}_{image.filename}"
+    image_path = os.path.join(upload_dir, image_filename)
+    with open(image_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+    # Create PosterModel
+    poster = PosterModel(
+        username=current_user.username,
+        message=message,
+        image_path=image_path
+    )
+    db.add(poster)
+    await db.commit()
+    await db.refresh(poster)
+    return Poster.from_orm(poster)
+
+@router.get("/posters/", response_model=List[Poster], tags=["Posters"], summary="Get all posters (paginated)")
+async def get_posters(
+    limit: int = 20,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db_session)
+):
+    stmt = select(PosterModel).order_by(desc(PosterModel.created_at)).limit(limit).offset(offset)
+    result = await db.execute(stmt)
+    posters = result.scalars().all()
+    return [Poster.from_orm(p) for p in posters]
+
+@router.patch("/posters/{poster_id}", response_model=Poster, tags=["Posters"], summary="Edit a poster (message and/or image)", dependencies=[Security(get_current_user)])
+async def edit_poster(
+    poster_id: int,
+    message: str = Form(None, description="New message for the poster"),
+    image: UploadFile = File(None, description="New image file for the poster (optional)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    # Fetch poster
+    poster = await db.get(PosterModel, poster_id)
+    if poster is None:
+        raise HTTPException(status_code=404, detail="Poster not found")
+    if getattr(poster, "username", None) != current_user.username:
+        raise HTTPException(status_code=403, detail="Not allowed to edit this poster")
+    # Update message
+    if message is not None:
+        setattr(poster, "message", message)
+    # Update image if provided
+    if image is not None:
+        # Remove old image file
+        image_path_val = str(getattr(poster, "image_path", ""))
+        if image_path_val and os.path.exists(image_path_val):
+            os.remove(image_path_val)
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        image_filename = f"{current_user.username}_{image.filename}"
+        image_path = os.path.join(upload_dir, image_filename)
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        setattr(poster, "image_path", image_path)
+    await db.commit()
+    await db.refresh(poster)
+    return Poster.from_orm(poster)
+
+@router.delete("/posters/{poster_id}", tags=["Posters"], summary="Delete a poster", dependencies=[Security(get_current_user)])
+async def delete_poster(
+    poster_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    poster = await db.get(PosterModel, poster_id)
+    if poster is None:
+        raise HTTPException(status_code=404, detail="Poster not found")
+    if getattr(poster, "username", None) != current_user.username:
+        raise HTTPException(status_code=403, detail="Not allowed to delete this poster")
+    # Remove image file
+    image_path_val = str(getattr(poster, "image_path", ""))
+    if image_path_val and os.path.exists(image_path_val):
+        os.remove(image_path_val)
+    await db.delete(poster)
+    await db.commit()
+    return {"message": "Poster deleted successfully"} 

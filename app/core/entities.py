@@ -358,4 +358,24 @@ class PendingUserInfo(BaseModel):
                 "email": "john.doe@example.com",
                 "created_at": "2024-01-15T10:30:00Z"
             }
+        }
+
+class Poster(BaseModel):
+    """Poster domain entity"""
+    id: int
+    username: str
+    message: str
+    image_path: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        schema_extra = {
+            "example": {
+                "id": 1,
+                "username": "john_doe",
+                "message": "Check out my new poster!",
+                "image_path": "/uploads/poster1.jpg",
+                "created_at": "2024-06-29T10:30:00Z"
+            }
         } 
