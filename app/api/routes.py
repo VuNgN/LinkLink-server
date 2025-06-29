@@ -1,49 +1,63 @@
 """
 API routes - Presentation layer
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Security
 from typing import List
 from datetime import datetime
 
 from ..core.services import AuthService, ImageService
-from ..core.entities import User, UserCreate, UserLogin, Token, ImageInfo, RefreshTokenRequest, LogoutRequest
-from .dependencies import get_auth_service, get_image_service, get_current_user
+from ..core.entities import (
+    User, UserCreate, UserLogin, Token, ImageInfo, RefreshTokenRequest, 
+    LogoutRequest, UserRegistrationResponse, AdminApprovalRequest, PendingUserInfo
+)
+from .dependencies import get_auth_service, get_image_service, get_current_user, get_current_admin_user
 
 router = APIRouter()
 
 @router.post("/register", 
-    response_model=dict,
+    response_model=UserRegistrationResponse,
     tags=["Authentication"],
-    summary="Register a new user",
+    summary="Register a new user (pending admin approval)",
     description="""
-    Register a new user account with username and password.
+    Register a new user account with username, email, and password.
+    The account will be pending admin approval before activation.
     
     ## Requirements
     
     - **Username**: 3-50 characters, unique
+    - **Email**: Valid email address, unique
     - **Password**: 6-100 characters
+    
+    ## Process
+    
+    1. User submits registration
+    2. Admin receives email notification
+    3. Admin approves/rejects the account
+    4. User receives approval/rejection notification
     
     ## Response
     
-    Returns a success message if registration is successful.
+    Returns a success message indicating the account is pending approval.
     
     ## Errors
     
-    - `400 Bad Request`: Invalid input data or username already exists
+    - `400 Bad Request`: Invalid input data, username exists, or email exists
     """,
     responses={
         200: {
-            "description": "User registered successfully",
+            "description": "Registration submitted successfully",
             "content": {
                 "application/json": {
                     "example": {
-                        "message": "User registered successfully"
+                        "message": "Registration submitted successfully. Your account will be reviewed by an administrator.",
+                        "status": "pending",
+                        "email": "john.doe@example.com"
                     }
                 }
             }
         },
         400: {
-            "description": "Bad request - validation error or username exists",
+            "description": "Bad request - validation error or username/email exists",
             "content": {
                 "application/json": {
                     "example": {
@@ -59,24 +73,155 @@ async def register(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """
-    Register a new user account.
+    Register a new user account (pending admin approval).
     
-    This endpoint creates a new user account with the provided username and password.
-    The password is securely hashed before storage.
+    This endpoint creates a new user account with pending status.
+    The admin will receive an email notification and can approve/reject the account.
     
     **Example Request:**
     ```json
     {
         "username": "john_doe",
+        "email": "john.doe@example.com",
         "password": "securepassword123"
     }
     ```
     """
     try:
-        await auth_service.register_user(user_data)
-        return {"message": "User registered successfully"}
+        return await auth_service.register_user(user_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/admin/approve-user",
+    tags=["Admin"],
+    summary="Approve or reject a user registration",
+    description="""
+    Approve or reject a pending user registration.
+    Only accessible by admin users.
+    
+    ## Actions
+    
+    - **approve**: Activate the user account
+    - **reject**: Reject the user registration
+    
+    ## Notifications
+    
+    - User receives email notification of approval/rejection
+    - Admin can provide optional reason for rejection
+    """,
+    responses={
+        200: {
+            "description": "User approved/rejected successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "User john_doe approved successfully"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Bad request - user not found or invalid action",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "User not found"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized - admin access required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Admin access required"
+                    }
+                }
+            }
+        }
+    }
+)
+async def approve_user(
+    request: AdminApprovalRequest,
+    current_user: User = Depends(get_current_admin_user),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Approve or reject a user registration.
+    
+    **Example Request:**
+    ```json
+    {
+        "username": "john_doe",
+        "action": "approve",
+        "admin_username": "admin",
+        "reason": "Account looks legitimate"
+    }
+    ```
+    """
+    # TODO: Add admin role check
+    # if not current_user.is_admin:
+    #     raise HTTPException(status_code=401, detail="Admin access required")
+    
+    try:
+        return await auth_service.approve_user(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/admin/pending-users",
+    response_model=List[PendingUserInfo],
+    tags=["Admin"],
+    summary="Get list of pending user registrations",
+    description="""
+    Get a list of all users with pending registration status.
+    Only accessible by admin users.
+    
+    ## Response
+    
+    Returns a list of pending users with their registration details.
+    """,
+    responses={
+        200: {
+            "description": "List of pending users",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "username": "john_doe",
+                            "email": "john.doe@example.com",
+                            "created_at": "2024-01-15T10:30:00Z"
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized - admin access required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Admin access required"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_pending_users(
+    current_user: User = Depends(get_current_admin_user),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """
+    Get list of pending user registrations.
+    
+    Returns all users who have registered but are waiting for admin approval.
+    """
+    # TODO: Add admin role check
+    # if not current_user.is_admin:
+    #     raise HTTPException(status_code=401, detail="Admin access required")
+    
+    return await auth_service.get_pending_users()
 
 @router.post("/login", 
     response_model=Token,
@@ -200,7 +345,7 @@ async def refresh_token(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """
-    Refresh the access token using a valid refresh token.
+    Refresh access token using refresh token.
     
     **Example Request:**
     ```json
@@ -210,7 +355,7 @@ async def refresh_token(
     ```
     """
     try:
-        return await auth_service.refresh_token(request.refresh_token)
+        return await auth_service.refresh_access_token(request.refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -254,7 +399,7 @@ async def logout(
     }
     ```
     """
-    success = await auth_service.logout_user(request.refresh_token)
+    await auth_service.logout_user(request.refresh_token, current_user.username)
     return {"message": "Logged out successfully"}
 
 @router.post("/upload-image",
@@ -318,7 +463,8 @@ async def logout(
                 }
             }
         }
-    }
+    },
+    dependencies=[Security(get_current_user)]
 )
 async def upload_image(
     file: UploadFile = File(..., description="Image file to upload"),
@@ -415,7 +561,8 @@ async def upload_image(
                 }
             }
         }
-    }
+    },
+    dependencies=[Security(get_current_user)]
 )
 async def get_images(
     current_user: User = Depends(get_current_user),

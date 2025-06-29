@@ -12,10 +12,15 @@ class UserModel(Base):
     __tablename__ = "users"
     
     username = Column(String(50), primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)  # Admin flag
+    status = Column(String(20), default="pending")  # pending, approved, rejected
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approved_by = Column(String(50), nullable=True)
 
 class ImageModel(Base):
     """Image database model"""

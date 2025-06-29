@@ -5,169 +5,300 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+import bcrypt
+from fastapi import HTTPException, status
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from pydantic import EmailStr
 
-from .entities import User, Image, Token, UserCreate, UserLogin, ImageInfo
-from .interfaces import UserRepository, ImageRepository, TokenRepository, FileStorage
+from .entities import User, Image, Token, UserCreate, UserLogin, ImageInfo, RefreshTokenRequest, UserRegistrationResponse, AdminApprovalRequest, PendingUserInfo, UserStatus
+from .interfaces import UserRepository, ImageRepository, TokenRepository, FileStorage, RefreshTokenRepository
+
+class EmailService:
+    """Email service for sending notifications"""
+    
+    def __init__(self, mail_config: ConnectionConfig):
+        self.fastmail = FastMail(mail_config)
+    
+    async def send_registration_notification(self, user_email: str, username: str, admin_email: str):
+        """Send registration notification to admin"""
+        message = MessageSchema(
+            subject="New User Registration - LinkLink Server",
+            recipients=[admin_email],
+            body=f"""
+            <html>
+                <body>
+                    <h2>New User Registration</h2>
+                    <p>A new user has registered for an account:</p>
+                    <ul>
+                        <li><strong>Username:</strong> {username}</li>
+                        <li><strong>Email:</strong> {user_email}</li>
+                        <li><strong>Registration Date:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                    </ul>
+                    <p>Please review and approve/reject this registration.</p>
+                    <p>You can approve or reject this user through the admin interface.</p>
+                </body>
+            </html>
+            """,
+            subtype="html"
+        )
+        await self.fastmail.send_message(message)
+    
+    async def send_approval_notification(self, user_email: str, username: str, approved: bool, reason: Optional[str] = None):
+        """Send approval/rejection notification to user"""
+        status = "approved" if approved else "rejected"
+        subject = f"Account {status.title()} - LinkLink Server"
+        
+        body_content = f"""
+        <html>
+            <body>
+                <h2>Account {status.title()}</h2>
+                <p>Dear {username},</p>
+                <p>Your account registration has been <strong>{status}</strong>.</p>
+        """
+        
+        if approved:
+            body_content += """
+                <p>You can now log in to your account and start using our services.</p>
+                <p>Thank you for choosing LinkLink Server!</p>
+            """
+        else:
+            body_content += f"""
+                <p>Reason: {reason or 'No specific reason provided'}</p>
+                <p>If you believe this was an error, please contact support.</p>
+            """
+        
+        body_content += """
+            </body>
+        </html>
+        """
+        
+        message = MessageSchema(
+            subject=subject,
+            recipients=[user_email],
+            body=body_content,
+            subtype="html"
+        )
+        await self.fastmail.send_message(message)
 
 class AuthService:
-    """Authentication business logic"""
+    """Authentication and authorization service"""
     
     def __init__(
-        self,
-        user_repo: UserRepository,
-        token_repo: TokenRepository,
+        self, 
+        user_repository: UserRepository, 
+        refresh_token_repository: RefreshTokenRepository,
+        email_service: EmailService,
         secret_key: str,
-        algorithm: str = "HS256",
-        access_token_expire_minutes: int = 30,
-        refresh_token_expire_days: int = 7
+        admin_email: str
     ):
-        self.user_repo = user_repo
-        self.token_repo = token_repo
+        self.user_repository = user_repository
+        self.refresh_token_repository = refresh_token_repository
+        self.email_service = email_service
         self.secret_key = secret_key
-        self.algorithm = algorithm
-        self.access_token_expire_minutes = access_token_expire_minutes
-        self.refresh_token_expire_days = refresh_token_expire_days
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.admin_email = admin_email
+        self.algorithm = "HS256"
+        self.access_token_expire_minutes = 30
+        self.refresh_token_expire_days = 7
     
-    def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify password against hash"""
-        return self.pwd_context.verify(plain_password, hashed_password)
-    
-    def _get_password_hash(self, password: str) -> str:
-        """Hash password"""
-        return self.pwd_context.hash(password)
-    
-    def _create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        """Create JWT access token"""
-        to_encode = data.copy()
-        if expires_delta:
-            expire = datetime.utcnow() + expires_delta
-        else:
-            expire = datetime.utcnow() + timedelta(minutes=15)
-        to_encode.update({"exp": expire, "type": "access"})
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-    
-    def _create_refresh_token(self, data: dict) -> str:
-        """Create JWT refresh token"""
-        to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
-        to_encode.update({"exp": expire, "type": "refresh"})
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-    
-    async def register_user(self, user_data: UserCreate) -> User:
-        """Register a new user"""
-        # Check if user already exists
-        existing_user = await self.user_repo.get_by_username(user_data.username)
+    async def register_user(self, user_data: UserCreate) -> UserRegistrationResponse:
+        """Register a new user (pending admin approval)"""
+        # Check if username already exists
+        existing_user = await self.user_repository.get_by_username(user_data.username)
         if existing_user:
-            raise ValueError("Username already registered")
+            raise ValueError("Username already exists")
         
-        # Create new user
-        hashed_password = self._get_password_hash(user_data.password)
+        # Check if email already exists
+        existing_email = await self.user_repository.get_by_email(user_data.email)
+        if existing_email:
+            raise ValueError("Email already registered")
+        
+        # Hash password
+        hashed_password = bcrypt.hashpw(
+            user_data.password.encode('utf-8'), 
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        
+        # Create user with pending status
         user = User(
             username=user_data.username,
+            email=user_data.email,
             hashed_password=hashed_password,
-            is_active=True
+            status=UserStatus.PENDING,
+            is_active=False  # Inactive until approved
         )
         
-        return await self.user_repo.create(user)
-    
-    async def authenticate_user(self, credentials: UserLogin) -> Optional[User]:
-        """Authenticate user with username and password"""
-        user = await self.user_repo.get_by_username(credentials.username)
-        if not user or not user.is_active:
-            return None
+        await self.user_repository.create(user)
         
-        if not self._verify_password(credentials.password, user.hashed_password):
-            return None
+        # Send notification to admin
+        await self.email_service.send_registration_notification(
+            user_data.email, 
+            user_data.username, 
+            self.admin_email
+        )
         
-        return user
+        return UserRegistrationResponse(
+            message="Registration submitted successfully. Your account will be reviewed by an administrator.",
+            status="pending",
+            email=user_data.email
+        )
     
     async def login_user(self, credentials: UserLogin) -> Token:
-        """Login user and return tokens"""
-        user = await self.authenticate_user(credentials)
+        """Login user and return JWT tokens"""
+        user = await self.user_repository.get_by_username(credentials.username)
         if not user:
-            raise ValueError("Incorrect username or password")
+            raise ValueError("Invalid username or password")
+        
+        # Check if user is approved
+        if user.status != UserStatus.APPROVED:
+            if user.status == UserStatus.PENDING:
+                raise ValueError("Account is pending approval. Please wait for admin review.")
+            elif user.status == UserStatus.REJECTED:
+                raise ValueError("Account has been rejected. Please contact support.")
+        
+        # Check if user is active
+        if not user.is_active:
+            raise ValueError("Account is deactivated")
+        
+        # Verify password
+        if not bcrypt.checkpw(credentials.password.encode('utf-8'), user.hashed_password.encode('utf-8')):
+            raise ValueError("Invalid username or password")
         
         # Create tokens
-        access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
-        access_token = self._create_access_token(
-            data={"sub": user.username}, expires_delta=access_token_expires
-        )
-        refresh_token = self._create_refresh_token(data={"sub": user.username})
+        access_token = self._create_access_token(user.username, user.is_admin)
+        refresh_token = self._create_refresh_token(user.username, user.is_admin)
         
         # Store refresh token
-        await self.token_repo.store_refresh_token(refresh_token, user.username)
+        await self.refresh_token_repository.create(
+            token=refresh_token,
+            username=user.username,
+            expires_at=datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+        )
         
         return Token(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_at=datetime.utcnow() + access_token_expires
+            expires_at=datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
         )
     
-    async def refresh_token(self, refresh_token: str) -> Token:
-        """Refresh access token using refresh token"""
-        try:
-            payload = jwt.decode(refresh_token, self.secret_key, algorithms=[self.algorithm])
-            username: str = payload.get("sub")
-            token_type: str = payload.get("type")
+    async def approve_user(self, request: AdminApprovalRequest) -> dict:
+        """Approve or reject a user registration"""
+        user = await self.user_repository.get_by_username(request.username)
+        if not user:
+            raise ValueError("User not found")
+        
+        if user.status != UserStatus.PENDING:
+            raise ValueError(f"User is already {user.status}")
+        
+        if request.action.lower() == "approve":
+            user.status = UserStatus.APPROVED
+            user.is_active = True
+            user.approved_at = datetime.utcnow()
+            user.approved_by = request.admin_username
+            await self.user_repository.update(user)
             
-            if not username or token_type != "refresh":
-                raise ValueError("Invalid refresh token")
-            
-            # Verify token exists in storage
-            stored_username = await self.token_repo.get_username_by_refresh_token(refresh_token)
-            if not stored_username or stored_username != username:
-                raise ValueError("Refresh token not found")
-            
-            # Verify user exists
-            user = await self.user_repo.get_by_username(username)
-            if not user or not user.is_active:
-                raise ValueError("User not found")
-            
-            # Create new tokens
-            access_token_expires = timedelta(minutes=self.access_token_expire_minutes)
-            new_access_token = self._create_access_token(
-                data={"sub": username}, expires_delta=access_token_expires
-            )
-            new_refresh_token = self._create_refresh_token(data={"sub": username})
-            
-            # Update token storage
-            await self.token_repo.delete_refresh_token(refresh_token)
-            await self.token_repo.store_refresh_token(new_refresh_token, username)
-            
-            return Token(
-                access_token=new_access_token,
-                refresh_token=new_refresh_token,
-                token_type="bearer",
-                expires_at=datetime.utcnow() + access_token_expires
+            # Send approval notification
+            await self.email_service.send_approval_notification(
+                user.email, 
+                user.username, 
+                True, 
+                request.reason
             )
             
-        except JWTError:
-            raise ValueError("Invalid refresh token")
+            return {"message": f"User {user.username} approved successfully"}
+            
+        elif request.action.lower() == "reject":
+            user.status = UserStatus.REJECTED
+            user.is_active = False
+            await self.user_repository.update(user)
+            
+            # Send rejection notification
+            await self.email_service.send_approval_notification(
+                user.email, 
+                user.username, 
+                False, 
+                request.reason
+            )
+            
+            return {"message": f"User {user.username} rejected"}
+        else:
+            raise ValueError("Invalid action. Use 'approve' or 'reject'")
     
-    async def logout_user(self, refresh_token: str) -> bool:
-        """Logout user by invalidating refresh token"""
-        return await self.token_repo.delete_refresh_token(refresh_token)
+    async def get_pending_users(self) -> List[PendingUserInfo]:
+        """Get list of pending user registrations"""
+        users = await self.user_repository.get_by_status(UserStatus.PENDING)
+        return [
+            PendingUserInfo(
+                username=user.username,
+                email=user.email,
+                created_at=user.created_at
+            )
+            for user in users
+        ]
     
-    async def get_current_user(self, token: str) -> Optional[User]:
-        """Get current user from access token"""
+    def _create_access_token(self, username: str, is_admin: bool = False) -> str:
+        """Create JWT access token"""
+        to_encode = {
+            "sub": username,
+            "is_admin": is_admin,
+            "exp": datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+        }
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+    
+    def _create_refresh_token(self, username: str, is_admin: bool = False) -> str:
+        """Create JWT refresh token"""
+        to_encode = {
+            "sub": username,
+            "is_admin": is_admin,
+            "exp": datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+        }
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+    
+    def verify_token(self, token: str) -> str:
+        """Verify JWT token and return username"""
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            username: str = payload.get("sub")
-            token_type: str = payload.get("type")
-            
-            if not username or token_type != "access":
-                return None
-            
-            user = await self.user_repo.get_by_username(username)
-            if not user or not user.is_active:
-                return None
-            
-            return user
-            
+            username = payload.get("sub")
+            if username is None:
+                raise ValueError("Invalid token")
+            return username
         except JWTError:
-            return None
+            raise ValueError("Invalid token")
+    
+    async def refresh_access_token(self, refresh_token: str) -> Token:
+        """Refresh access token using refresh token"""
+        # Verify refresh token
+        username = self.verify_token(refresh_token)
+        
+        # Check if refresh token exists in database
+        stored_token = await self.refresh_token_repository.get_by_token(refresh_token)
+        if not stored_token:
+            raise ValueError("Invalid refresh token")
+        
+        # Check if token is expired
+        if stored_token.expires_at < datetime.utcnow():
+            await self.refresh_token_repository.delete_by_token(refresh_token)
+            raise ValueError("Refresh token expired")
+        
+        # Get user
+        user = await self.user_repository.get_by_username(username)
+        if not user or not user.is_active or user.status != UserStatus.APPROVED:
+            raise ValueError("User not found or inactive")
+        
+        # Create new tokens
+        new_access_token = self._create_access_token(username, user.is_admin)
+        new_refresh_token = self._create_refresh_token(username, user.is_admin)
+        
+        return Token(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer",
+            expires_at=datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+        )
+    
+    async def logout_user(self, refresh_token: str, username: str):
+        """Logout user by invalidating refresh token"""
+        await self.refresh_token_repository.delete_by_token(refresh_token)
 
 class ImageService:
     """Image management business logic"""
