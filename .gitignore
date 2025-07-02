@@ -199,3 +199,13 @@ logs/
 # Local development
 local/
 dev/ 
+
+# React frontend build output
+frontend/dist/
+
+# Node dependencies
+frontend/node_modules/
+
+# (Optional) Frontend environment files
+frontend/.env
+frontend/.env.local

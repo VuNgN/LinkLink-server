@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 import asyncio
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+import os
 
 from app.api.routes import router
 from app.infrastructure.database import init_db, close_db
@@ -137,6 +139,9 @@ app.include_router(router, prefix="/api/v1")
 # Serve the admin directory at /admin
 app.mount("/admin", StaticFiles(directory="admin"), name="admin")
 
+frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
 def custom_openapi():
     """Custom OpenAPI schema with enhanced documentation"""
     if app.openapi_schema:
@@ -208,26 +213,11 @@ async def shutdown_event():
     await close_db()
     print("✅ Database connections closed")
 
-@app.get("/", tags=["Health"])
+@app.get("/api-root", tags=["Health"])
 async def root():
     """
     # 🏠 API Root
-    
     Welcome to the Image Upload Server API! This endpoint provides basic information about the API.
-    
-    ## Quick Start
-    
-    1. **Register** a new user at `/api/v1/register`
-    2. **Login** to get access tokens at `/api/v1/login`
-    3. **Upload images** at `/api/v1/upload-image`
-    4. **View documentation** at `/docs`
-    
-    ## Authentication
-    
-    Most endpoints require authentication. Include your JWT token in the Authorization header:
-    ```
-    Authorization: Bearer <your_access_token>
-    ```
     """
     return {
         "message": "🖼️ Image Upload Server API (Clean Architecture + PostgreSQL)",
