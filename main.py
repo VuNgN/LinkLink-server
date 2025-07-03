@@ -6,11 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 import asyncio
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 import os
+import logging
 
 from app.api.routes import router
 from app.infrastructure.database import init_db, close_db
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+)
+logger = logging.getLogger("image-upload-server")
 
 # Create FastAPI app with enhanced metadata
 app = FastAPI(
@@ -133,14 +141,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Log all requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+import time
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        logger.info(f"Request: {request.method} {request.url}")
+        start_time = time.time()
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.exception(f"Error handling request: {request.method} {request.url}")
+            raise
+        process_time = (time.time() - start_time) * 1000
+        logger.info(f"Response: {request.method} {request.url} - Status: {response.status_code} - {process_time:.2f}ms")
+        return response
+
+app.add_middleware(LoggingMiddleware)
+
 # Include API routes
 app.include_router(router, prefix="/api/v1")
 
 # Serve the admin directory at /admin
 app.mount("/admin", StaticFiles(directory="admin"), name="admin")
 
+# Serve uploaded images at /uploads
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
-app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+@app.get("/{full_path:path}", response_class=FileResponse)
+async def spa_catch_all(full_path: str):
+    static_file = os.path.join(frontend_dist, full_path)
+    if os.path.isfile(static_file):
+        return FileResponse(static_file)
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse(content="index.html not found", status_code=404)
 
 def custom_openapi():
     """Custom OpenAPI schema with enhanced documentation"""
@@ -202,16 +243,16 @@ app.openapi = custom_openapi
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
-    print("🚀 Starting Image Upload Server with PostgreSQL...")
+    logger.info("🚀 Starting Image Upload Server with PostgreSQL...")
     await init_db()
-    print("✅ Database initialized successfully")
+    logger.info("✅ Database initialized successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up database connections on shutdown"""
-    print("🛑 Shutting down server...")
+    logger.info("🛑 Shutting down server...")
     await close_db()
-    print("✅ Database connections closed")
+    logger.info("✅ Database connections closed")
 
 @app.get("/api-root", tags=["Health"])
 async def root():

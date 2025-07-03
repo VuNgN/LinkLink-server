@@ -19,6 +19,10 @@ from app.infrastructure.database import get_db_session
 
 router = APIRouter()
 
+def public_image_path(image_path):
+    filename = os.path.basename(image_path)
+    return f"/uploads/{filename}" if filename else ""
+
 @router.post("/register", 
     response_model=UserRegistrationResponse,
     tags=["Authentication"],
@@ -759,7 +763,8 @@ async def create_poster(
     db.add(poster)
     await db.commit()
     await db.refresh(poster)
-    return Poster.from_orm(poster)
+    poster_obj = Poster.from_orm(poster)
+    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
 
 @router.get("/posters/", response_model=List[Poster], tags=["Posters"], summary="Get all posters (paginated)")
 async def get_posters(
@@ -770,7 +775,8 @@ async def get_posters(
     stmt = select(PosterModel).order_by(desc(PosterModel.created_at)).limit(limit).offset(offset)
     result = await db.execute(stmt)
     posters = result.scalars().all()
-    return [Poster.from_orm(p) for p in posters]
+    poster_objs = [Poster.from_orm(p) for p in posters]
+    return [{**po.dict(), "image_path": public_image_path(po.image_path)} for po in poster_objs]
 
 @router.patch("/posters/{poster_id}", response_model=Poster, tags=["Posters"], summary="Edit a poster (message and/or image)", dependencies=[Security(get_current_user)])
 async def edit_poster(
@@ -804,7 +810,8 @@ async def edit_poster(
         setattr(poster, "image_path", image_path)
     await db.commit()
     await db.refresh(poster)
-    return Poster.from_orm(poster)
+    poster_obj = Poster.from_orm(poster)
+    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
 
 @router.delete("/posters/{poster_id}", tags=["Posters"], summary="Delete a poster", dependencies=[Security(get_current_user)])
 async def delete_poster(
