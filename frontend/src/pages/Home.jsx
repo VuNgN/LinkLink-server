@@ -1,56 +1,9 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import fetchWithAuth from "../utils/fetchWithAuth";
-
-const PostItem = memo(function PostItem({ post }) {
-  // Xử lý image_path thành URL public
-  let imageUrl = post.image_path;
-  if (imageUrl && !imageUrl.startsWith("/uploads/")) {
-    const idx = imageUrl.lastIndexOf("/uploads/");
-    if (idx !== -1) imageUrl = imageUrl.slice(idx);
-  }
-  return (
-    <div
-      style={{
-        background: "var(--color-surface)",
-        borderRadius: 12,
-        boxShadow: "0 2px 8px #7C4DFF11",
-        margin: "0 auto 24px auto",
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        width: "100%",
-        maxWidth: 600,
-      }}
-    >
-      <img
-        src={imageUrl}
-        alt={post.message}
-        style={{
-          width: "100%",
-          height: "auto",
-          borderRadius: 8,
-          marginBottom: 12,
-          objectFit: "cover",
-          aspectRatio: "4/3",
-          maxHeight: 400,
-        }}
-        loading="lazy"
-      />
-      <div
-        style={{
-          color: "var(--color-on-surface)",
-          fontSize: 16,
-          textAlign: "center",
-          wordBreak: "break-word",
-        }}
-      >
-        {post.message}
-      </div>
-    </div>
-  );
-});
+import PostItem from "../components/PostItem";
+import PostDetail from "../components/PostDetail";
+import Modal from "../components/Modal";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -63,6 +16,7 @@ export default function Home() {
   const [formMessage, setFormMessage] = useState("");
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [selectedPost, setSelectedPost] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -79,7 +33,7 @@ export default function Home() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [navigate, formLoading]);
-  
+
   // Xử lý chọn ảnh
   function handleImageChange(e) {
     const file = e.target.files[0];
@@ -322,8 +276,15 @@ export default function Home() {
       <div style={{ width: "100%" }}>
         {posts.length === 0 && <div>Chưa có bài viết nào.</div>}
         {posts.map((post) => (
-          <PostItem key={post.id} post={post} />
+          <PostItem
+            key={post.id}
+            post={post}
+            onClick={() => setSelectedPost(post)}
+          />
         ))}
+        <Modal open={!!selectedPost} onClose={() => setSelectedPost(null)}>
+          {selectedPost && <PostDetail post={selectedPost} />}
+        </Modal>
       </div>
     </div>
   );
