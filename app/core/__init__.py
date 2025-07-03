@@ -1,1 +1,1 @@
-# Core domain package 
+# Core domain package

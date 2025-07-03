@@ -16,6 +16,7 @@ export default function Home() {
   const [formMessage, setFormMessage] = useState("");
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formPrivacy, setFormPrivacy] = useState("public");
   const [selectedPost, setSelectedPost] = useState(null);
 
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("image", formImage);
       formData.append("message", formMessage);
+      formData.append("privacy", formPrivacy);
       const res = await fetchWithAuth(
         "/api/v1/posters/",
         {
@@ -79,6 +81,7 @@ export default function Home() {
       setFormImage(null);
       setFormImageUrl("");
       setFormMessage("");
+      setFormPrivacy("private");
       setFormLoading(false);
     } catch (e) {
       setFormError(e.message);
@@ -94,7 +97,7 @@ export default function Home() {
     return (
       <div
         style={{
-          color: "var(--color-error)",
+          color: "var(--color-on-background, #222)",
           textAlign: "center",
           marginTop: 40,
         }}
@@ -116,6 +119,7 @@ export default function Home() {
         padding: 0,
         margin: 0,
         overflowX: "hidden",
+        color: "var(--color-on-background, #222)",
       }}
     >
       {/* Nút Đăng xuất + Đăng bài */}
@@ -197,7 +201,14 @@ export default function Home() {
             position: "relative",
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 8 }}>
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 20,
+              marginBottom: 8,
+              color: "var(--color-on-background, #222)",
+            }}
+          >
             Đăng bài viết mới
           </div>
           <input
@@ -224,14 +235,101 @@ export default function Home() {
             onChange={(e) => setFormMessage(e.target.value)}
             rows={3}
             style={{
-              padding: 12,
+              padding: 16,
               borderRadius: 8,
-              border: "1px solid #ccc",
+              border: "2px solid #bdbdbd",
               fontSize: 16,
               resize: "vertical",
+              color: "var(--color-on-background, #222)",
+              background: "#fff",
+              outline: "none",
+              boxShadow: "0 1px 4px #0001",
+              transition: "border 0.2s",
             }}
+            onFocus={(e) => (e.target.style.border = "2px solid #7c4dff")}
+            onBlur={(e) => (e.target.style.border = "2px solid #bdbdbd")}
             disabled={formLoading}
           />
+          {/* Chọn privacy */}
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              alignItems: "center",
+              color: "var(--color-on-background, #222)",
+            }}
+          >
+            <span>Quyền riêng tư:</span>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "#e3f2fd",
+                color: "#1565c0",
+                borderRadius: 8,
+                padding: "2px 10px",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="radio"
+                name="privacy"
+                value="public"
+                checked={formPrivacy === "public"}
+                onChange={() => setFormPrivacy("public")}
+                disabled={formLoading}
+                style={{ accentColor: "#1565c0" }}
+              />
+              Công khai
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "#e8f5e9",
+                color: "#388e3c",
+                borderRadius: 8,
+                padding: "2px 10px",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="radio"
+                name="privacy"
+                value="community"
+                checked={formPrivacy === "community"}
+                onChange={() => setFormPrivacy("community")}
+                disabled={formLoading}
+                style={{ accentColor: "#388e3c" }}
+              />
+              Cộng đồng
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "#ffebee",
+                color: "#b71c1c",
+                borderRadius: 8,
+                padding: "2px 10px",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="radio"
+                name="privacy"
+                value="private"
+                checked={formPrivacy === "private"}
+                onChange={() => setFormPrivacy("private")}
+                disabled={formLoading}
+                style={{ accentColor: "#b71c1c" }}
+              />
+              Riêng tư
+            </label>
+          </div>
           {formError && (
             <div style={{ color: "var(--color-error)", marginBottom: 8 }}>
               {formError}
@@ -243,7 +341,7 @@ export default function Home() {
               onClick={() => setShowForm(false)}
               style={{
                 background: "#eee",
-                color: "#333",
+                color: "var(--color-on-background, #222)",
                 border: "none",
                 borderRadius: 6,
                 padding: "8px 20px",
