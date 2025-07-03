@@ -79,7 +79,7 @@ export default function Home() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [navigate, formLoading]);
-
+  
   // Xử lý chọn ảnh
   function handleImageChange(e) {
     const file = e.target.files[0];
@@ -125,17 +125,7 @@ export default function Home() {
       setFormImage(null);
       setFormImageUrl("");
       setFormMessage("");
-      // Reload lại danh sách bài viết
       setFormLoading(false);
-      setLoading(true);
-      fetchWithAuth("/api/v1/posters/", {}, navigate)
-        .then(async (res) => {
-          if (!res.ok) throw new Error("Lỗi tải danh sách bài viết");
-          const data = await res.json();
-          setPosts(data);
-        })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
     } catch (e) {
       setFormError(e.message);
       setFormLoading(false);

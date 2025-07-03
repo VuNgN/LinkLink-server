@@ -175,6 +175,9 @@ app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="stat
 
 @app.get("/{full_path:path}", response_class=FileResponse)
 async def spa_catch_all(full_path: str):
+    # Không intercept các route API, uploads, admin
+    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("admin/"):
+        return HTMLResponse(content="Not found", status_code=404)
     static_file = os.path.join(frontend_dist, full_path)
     if os.path.isfile(static_file):
         return FileResponse(static_file)
