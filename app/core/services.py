@@ -2,7 +2,7 @@
 Business logic services - Core use cases
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import bcrypt
@@ -40,7 +40,7 @@ class EmailService:
                     <ul>
                         <li><strong>Username:</strong> {username}</li>
                         <li><strong>Email:</strong> {user_email}</li>
-                        <li><strong>Registration Date:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                        <li><strong>Registration Date:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
                     </ul>
                     <p>Please review and approve/reject this registration.</p>
                     <p>You can approve or reject this user through the admin interface.</p>
@@ -151,7 +151,7 @@ class AuthService:
             email=user_data.email,
         )
 
-    async def login_user(self, credentials: UserLogin) -> Token:
+    async def login_user(self, credentials: UserLogin) -> dict:
         """Login user and return JWT tokens"""
         user = await self.user_repository.get_by_username(credentials.username)
         if not user:
@@ -184,17 +184,18 @@ class AuthService:
         await self.refresh_token_repository.create(
             token=refresh_token,
             username=user.username,
-            expires_at=datetime.utcnow()
+            expires_at=datetime.now(timezone.utc)
             + timedelta(days=self.refresh_token_expire_days),
         )
 
-        return Token(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_at=datetime.utcnow()
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_at": datetime.now(timezone.utc)
             + timedelta(minutes=self.access_token_expire_minutes),
-        )
+            "username": user.username,
+        }
 
     async def approve_user(self, request: AdminApprovalRequest) -> dict:
         """Approve or reject a user registration"""
@@ -208,7 +209,7 @@ class AuthService:
         if request.action.lower() == "approve":
             user.status = UserStatus.APPROVED
             user.is_active = True
-            user.approved_at = datetime.utcnow()
+            user.approved_at = datetime.now(timezone.utc)
             user.approved_by = request.admin_username
             await self.user_repository.update(user)
 
@@ -248,7 +249,7 @@ class AuthService:
         to_encode = {
             "sub": username,
             "is_admin": is_admin,
-            "exp": datetime.utcnow()
+            "exp": datetime.now(timezone.utc)
             + timedelta(minutes=self.access_token_expire_minutes),
         }
         return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
@@ -258,7 +259,8 @@ class AuthService:
         to_encode = {
             "sub": username,
             "is_admin": is_admin,
-            "exp": datetime.utcnow() + timedelta(days=self.refresh_token_expire_days),
+            "exp": datetime.now(timezone.utc)
+            + timedelta(days=self.refresh_token_expire_days),
         }
         return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
 
@@ -273,7 +275,7 @@ class AuthService:
         except JWTError:
             raise ValueError("Invalid token")
 
-    async def refresh_access_token(self, refresh_token: str) -> Token:
+    async def refresh_access_token(self, refresh_token: str) -> dict:
         """Refresh access token using refresh token"""
         # Verify refresh token
         username = self.verify_token(refresh_token)
@@ -284,7 +286,7 @@ class AuthService:
             raise ValueError("Invalid refresh token")
 
         # Check if token is expired
-        if stored_token.expires_at < datetime.utcnow():
+        if stored_token.expires_at < datetime.now(timezone.utc):
             await self.refresh_token_repository.delete_by_token(refresh_token)
             raise ValueError("Refresh token expired")
 
@@ -297,13 +299,14 @@ class AuthService:
         new_access_token = self._create_access_token(username, user.is_admin)
         new_refresh_token = self._create_refresh_token(username, user.is_admin)
 
-        return Token(
-            access_token=new_access_token,
-            refresh_token=new_refresh_token,
-            token_type="bearer",
-            expires_at=datetime.utcnow()
+        return {
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer",
+            "expires_at": datetime.now(timezone.utc)
             + timedelta(minutes=self.access_token_expire_minutes),
-        )
+            "username": user.username,
+        }
 
     async def logout_user(self, refresh_token: str, username: str):
         """Logout user by invalidating refresh token"""
@@ -350,7 +353,7 @@ class ImageService:
 
     def _generate_filename(self, username: str, original_filename: str) -> str:
         """Generate unique filename"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         file_extension = (
             original_filename.split(".")[-1] if "." in original_filename else "jpg"
         )
