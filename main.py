@@ -5,8 +5,9 @@ Main application entry point using Clean Architecture with PostgreSQL
 import asyncio
 import logging
 import os
+from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse
@@ -14,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.infrastructure.database import close_db, init_db
+from app.infrastructure.notifier import PostNotifier, post_notifier
 
 # Setup logging
 logging.basicConfig(
@@ -325,6 +327,19 @@ async def health_check():
         "version": "2.1.0",
         "timestamp": "2024-01-15T10:30:00Z",
     }
+
+
+@app.websocket("/ws/posts/notify")
+async def websocket_post_notify(websocket: WebSocket):
+    # Lấy username từ query param (nếu có)
+    username = websocket.query_params.get("username") or ""
+    await post_notifier.connect(websocket, username)
+    try:
+        while True:
+            # Keep connection alive, ignore incoming messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        post_notifier.disconnect(websocket)
 
 
 if __name__ == "__main__":

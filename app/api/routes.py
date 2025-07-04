@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import get_db_session
 from app.infrastructure.models import PosterModel
+from app.infrastructure.notifier import post_notifier
 
 from ..core.entities import (AdminApprovalRequest, ImageInfo, LogoutRequest,
                              PendingUserInfo, Poster, RefreshTokenRequest,
@@ -741,6 +742,12 @@ async def create_poster(
     await db.commit()
     await db.refresh(poster)
     poster_obj = Poster.from_orm(poster)
+    # Notify all clients except the poster, chỉ khi public/community
+    if privacy in ("public", "community"):
+        try:
+            await post_notifier.broadcast_new_post(current_user.username)
+        except Exception:
+            pass
     return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
 
 
