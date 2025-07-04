@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import "../styles/App.css";
 
 export default function Login() {
@@ -7,6 +7,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Lấy redirect từ query string
+  const params = new URLSearchParams(location.search);
+  const redirect = params.get("redirect");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,7 +32,12 @@ export default function Login() {
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("refresh_token", data.refresh_token);
       localStorage.setItem("username", data.username);
-      navigate("/");
+      // Nếu có redirect thì chuyển về đó, không thì về home
+      if (redirect) {
+        window.location.replace(redirect);
+      } else {
+        navigate("/");
+      }
     } catch {
       setError("Lỗi đăng nhập!");
     }

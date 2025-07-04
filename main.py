@@ -1,22 +1,24 @@
 """
 Main application entry point using Clean Architecture with PostgreSQL
 """
+
+import asyncio
+import logging
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-import asyncio
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
-import os
-import logging
 
 from app.api.routes import router
-from app.infrastructure.database import init_db, close_db
+from app.infrastructure.database import close_db, init_db
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("image-upload-server")
 
@@ -99,14 +101,8 @@ open http://localhost:8000/docs
         "url": "https://opensource.org/licenses/MIT",
     },
     servers=[
-        {
-            "url": "http://localhost:8000",
-            "description": "Development server"
-        },
-        {
-            "url": "https://api.yourapp.com",
-            "description": "Production server"
-        }
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://api.yourapp.com", "description": "Production server"},
     ],
     tags_metadata=[
         {
@@ -129,7 +125,7 @@ open http://localhost:8000/docs
             "name": "Health",
             "description": "Server health and status endpoints.",
         },
-    ]
+    ],
 )
 
 # Add CORS middleware
@@ -141,10 +137,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import time
+
 # Log all requests
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-import time
+
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -156,8 +154,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             logger.exception(f"Error handling request: {request.method} {request.url}")
             raise
         process_time = (time.time() - start_time) * 1000
-        logger.info(f"Response: {request.method} {request.url} - Status: {response.status_code} - {process_time:.2f}ms")
+        logger.info(
+            f"Response: {request.method} {request.url} - Status: {response.status_code} - {process_time:.2f}ms"
+        )
         return response
+
 
 app.add_middleware(LoggingMiddleware)
 
@@ -173,10 +174,15 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")
 
+
 @app.get("/{full_path:path}", response_class=FileResponse)
 async def spa_catch_all(full_path: str):
     # Không intercept các route API, uploads, admin
-    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("admin/"):
+    if (
+        full_path.startswith("api/")
+        or full_path.startswith("uploads/")
+        or full_path.startswith("admin/")
+    ):
         return HTMLResponse(content="Not found", status_code=404)
     static_file = os.path.join(frontend_dist, full_path)
     if os.path.isfile(static_file):
@@ -186,28 +192,29 @@ async def spa_catch_all(full_path: str):
         return FileResponse(index_path)
     return HTMLResponse(content="index.html not found", status_code=404)
 
+
 def custom_openapi():
     """Custom OpenAPI schema with enhanced documentation"""
     if app.openapi_schema:
         return app.openapi_schema
-    
+
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
-    
+
     # Add security schemes
     openapi_schema["components"]["securitySchemes"] = {
         "HTTPBearer": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "Enter your JWT token in the format: Bearer <token>"
+            "description": "Enter your JWT token in the format: Bearer <token>",
         }
     }
-    
+
     # Add response examples
     openapi_schema["components"]["examples"] = {
         "LoginSuccess": {
@@ -216,8 +223,8 @@ def custom_openapi():
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "username": "john_doe"
-            }
+                "username": "john_doe",
+            },
         },
         "ImageUploadSuccess": {
             "summary": "Successful image upload response",
@@ -227,21 +234,21 @@ def custom_openapi():
                 "file_size": 1024000,
                 "original_filename": "vacation.jpg",
                 "content_type": "image/jpeg",
-                "upload_date": "2024-01-15T10:30:00Z"
-            }
+                "upload_date": "2024-01-15T10:30:00Z",
+            },
         },
         "ErrorResponse": {
             "summary": "Error response example",
-            "value": {
-                "detail": "Invalid credentials"
-            }
-        }
+            "value": {"detail": "Invalid credentials"},
+        },
     }
-    
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+
 app.openapi = custom_openapi
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -250,12 +257,14 @@ async def startup_event():
     await init_db()
     logger.info("✅ Database initialized successfully")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up database connections on shutdown"""
     logger.info("🛑 Shutting down server...")
     await close_db()
     logger.info("✅ Database connections closed")
+
 
 @app.get("/api-root", tags=["Health"])
 async def root():
@@ -272,50 +281,53 @@ async def root():
             "JWT Authentication",
             "Image Upload",
             "PostgreSQL Storage",
-            "Auto-generated Docs"
+            "Auto-generated Docs",
         ],
         "endpoints": {
             "docs": "/docs",
             "redoc": "/redoc",
             "openapi": "/openapi.json",
-            "health": "/health"
+            "health": "/health",
         },
         "authentication": {
             "type": "JWT Bearer Token",
             "register": "/api/v1/register",
-            "login": "/api/v1/login"
-        }
+            "login": "/api/v1/login",
+        },
     }
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
     # 🏥 Health Check
-    
+
     Check the health status of the API server and database connection.
-    
+
     ## Response
-    
+
     - `status`: Overall health status
     - `architecture`: Software architecture used
     - `database`: Database type and status
     - `timestamp`: Current server time
-    
+
     ## Usage
-    
+
     This endpoint is useful for:
     - Load balancer health checks
     - Monitoring systems
     - DevOps automation
     """
     return {
-        "status": "healthy", 
+        "status": "healthy",
         "architecture": "clean",
         "database": "postgresql",
         "version": "2.1.0",
-        "timestamp": "2024-01-15T10:30:00Z"
+        "timestamp": "2024-01-15T10:30:00Z",
     }
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

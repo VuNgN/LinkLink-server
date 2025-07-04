@@ -1,29 +1,40 @@
 """
 API routes - Presentation layer
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Security, Form
-from typing import List
-from datetime import datetime
-import os, shutil
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, update, delete as sqlalchemy_delete
 
-from ..core.services import AuthService, ImageService
-from ..core.entities import (
-    User, UserCreate, UserLogin, Token, ImageInfo, RefreshTokenRequest, 
-    LogoutRequest, UserRegistrationResponse, AdminApprovalRequest, PendingUserInfo, Poster
-)
-from .dependencies import get_auth_service, get_image_service, get_current_user, get_current_admin_user
-from app.infrastructure.models import PosterModel
+import os
+import shutil
+from datetime import datetime
+from typing import List
+
+from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Path,
+                     Security, UploadFile, status)
+from sqlalchemy import delete as sqlalchemy_delete
+from sqlalchemy import desc, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.database import get_db_session
+from app.infrastructure.models import PosterModel
+
+from ..core.entities import (AdminApprovalRequest, ImageInfo, LogoutRequest,
+                             PendingUserInfo, Poster, RefreshTokenRequest,
+                             Token, User, UserCreate, UserLogin,
+                             UserRegistrationResponse)
+from ..core.services import AuthService, ImageService
+from .dependencies import (get_auth_service, get_current_admin_user,
+                           get_current_user, get_image_service,
+                           get_optional_user)
 
 router = APIRouter()
+
 
 def public_image_path(image_path):
     filename = os.path.basename(image_path)
     return f"/uploads/{filename}" if filename else ""
 
-@router.post("/register", 
+
+@router.post(
+    "/register",
     response_model=UserRegistrationResponse,
     tags=["Authentication"],
     summary="Register a new user (pending admin approval)",
@@ -60,33 +71,28 @@ def public_image_path(image_path):
                     "example": {
                         "message": "Registration submitted successfully. Your account will be reviewed by an administrator.",
                         "status": "pending",
-                        "email": "john.doe@example.com"
+                        "email": "john.doe@example.com",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Bad request - validation error or username/email exists",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Username already exists"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Username already exists"}}
+            },
+        },
+    },
 )
 async def register(
-    user_data: UserCreate,
-    auth_service: AuthService = Depends(get_auth_service)
+    user_data: UserCreate, auth_service: AuthService = Depends(get_auth_service)
 ):
     """
     Register a new user account (pending admin approval).
-    
+
     This endpoint creates a new user account with pending status.
     The admin will receive an email notification and can approve/reject the account.
-    
+
     **Example Request:**
     ```json
     {
@@ -101,7 +107,9 @@ async def register(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/admin/approve-user",
+
+@router.post(
+    "/admin/approve-user",
     tags=["Admin"],
     summary="Approve or reject a user registration",
     description="""
@@ -123,42 +131,30 @@ async def register(
             "description": "User approved/rejected successfully",
             "content": {
                 "application/json": {
-                    "example": {
-                        "message": "User john_doe approved successfully"
-                    }
+                    "example": {"message": "User john_doe approved successfully"}
                 }
-            }
+            },
         },
         400: {
             "description": "Bad request - user not found or invalid action",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "User not found"
-                    }
-                }
-            }
+            "content": {"application/json": {"example": {"detail": "User not found"}}},
         },
         401: {
             "description": "Unauthorized - admin access required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Admin access required"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Admin access required"}}
+            },
+        },
+    },
 )
 async def approve_user(
     request: AdminApprovalRequest,
     current_user: User = Depends(get_current_admin_user),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Approve or reject a user registration.
-    
+
     **Example Request:**
     ```json
     {
@@ -172,13 +168,15 @@ async def approve_user(
     # TODO: Add admin role check
     # if not current_user.is_admin:
     #     raise HTTPException(status_code=401, detail="Admin access required")
-    
+
     try:
         return await auth_service.approve_user(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/admin/pending-users",
+
+@router.get(
+    "/admin/pending-users",
     response_model=List[PendingUserInfo],
     tags=["Admin"],
     summary="Get list of pending user registrations",
@@ -199,40 +197,38 @@ async def approve_user(
                         {
                             "username": "john_doe",
                             "email": "john.doe@example.com",
-                            "created_at": "2024-01-15T10:30:00Z"
+                            "created_at": "2024-01-15T10:30:00Z",
                         }
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Unauthorized - admin access required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Admin access required"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Admin access required"}}
+            },
+        },
+    },
 )
 async def get_pending_users(
     current_user: User = Depends(get_current_admin_user),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Get list of pending user registrations.
-    
+
     Returns all users who have registered but are waiting for admin approval.
     """
     # TODO: Add admin role check
     # if not current_user.is_admin:
     #     raise HTTPException(status_code=401, detail="Admin access required")
-    
+
     return await auth_service.get_pending_users()
 
-@router.post("/login", 
+
+@router.post(
+    "/login",
     response_model=Token,
     tags=["Authentication"],
     summary="Login user and get access tokens",
@@ -262,33 +258,30 @@ async def get_pending_users(
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "token_type": "bearer",
-                        "username": "john_doe"
+                        "username": "john_doe",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Invalid credentials",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Invalid username or password"
-                    }
+                    "example": {"detail": "Invalid username or password"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def login(
-    credentials: UserLogin,
-    auth_service: AuthService = Depends(get_auth_service)
+    credentials: UserLogin, auth_service: AuthService = Depends(get_auth_service)
 ):
     """
     Login user and receive JWT tokens.
-    
+
     Authenticates the user with username and password, then returns
     JWT access and refresh tokens for API access.
-    
+
     **Example Request:**
     ```json
     {
@@ -306,7 +299,9 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-@router.post("/refresh", 
+
+@router.post(
+    "/refresh",
     response_model=Token,
     tags=["Authentication"],
     summary="Refresh access token",
@@ -332,30 +327,25 @@ async def login(
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "token_type": "bearer",
-                        "username": "john_doe"
+                        "username": "john_doe",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Invalid or expired refresh token",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Invalid refresh token"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Invalid refresh token"}}
+            },
+        },
+    },
 )
 async def refresh_token(
-    request: RefreshTokenRequest,
-    auth_service: AuthService = Depends(get_auth_service)
+    request: RefreshTokenRequest, auth_service: AuthService = Depends(get_auth_service)
 ):
     """
     Refresh access token using refresh token.
-    
+
     **Example Request:**
     ```json
     {
@@ -368,7 +358,9 @@ async def refresh_token(
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
-@router.post("/logout",
+
+@router.post(
+    "/logout",
     tags=["Authentication"],
     summary="Logout user and invalidate tokens",
     description="""
@@ -384,23 +376,19 @@ async def refresh_token(
         200: {
             "description": "Logout successful",
             "content": {
-                "application/json": {
-                    "example": {
-                        "message": "Logged out successfully"
-                    }
-                }
-            }
+                "application/json": {"example": {"message": "Logged out successfully"}}
+            },
         }
-    }
+    },
 )
 async def logout(
     request: LogoutRequest,
     current_user: User = Depends(get_current_user),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Logout the current user and invalidate tokens.
-    
+
     **Example Request:**
     ```json
     {
@@ -411,7 +399,9 @@ async def logout(
     await auth_service.logout_user(request.refresh_token, current_user.username)
     return {"message": "Logged out successfully"}
 
-@router.post("/upload-image",
+
+@router.post(
+    "/upload-image",
     tags=["Images"],
     summary="Upload an image file",
     description="""
@@ -447,74 +437,70 @@ async def logout(
                         "file_size": 1024000,
                         "original_filename": "vacation.jpg",
                         "content_type": "image/jpeg",
-                        "upload_date": "2024-01-15T10:30:00Z"
+                        "upload_date": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid file or upload error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "File size exceeds 10MB limit"
-                    }
+                    "example": {"detail": "File size exceeds 10MB limit"}
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
-        }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
     },
-    dependencies=[Security(get_current_user)]
+    dependencies=[Security(get_current_user)],
 )
 async def upload_image(
     file: UploadFile = File(..., description="Image file to upload"),
     current_user: User = Depends(get_current_user),
-    image_service: ImageService = Depends(get_image_service)
+    image_service: ImageService = Depends(get_image_service),
 ):
     """
     Upload an image file to the server.
-    
+
     The file will be validated, processed, and stored securely.
     Only the authenticated user can access their uploaded images.
-    
+
     **Supported file types**: JPEG, PNG, GIF, WebP
     **Maximum file size**: 10MB
     """
     try:
         # Read file content
         file_content = await file.read()
-        
+
         # Upload image
         image = await image_service.upload_image(
             username=current_user.username,
             file_content=file_content,
             content_type=file.content_type or "application/octet-stream",
-            original_filename=file.filename or "unknown"
+            original_filename=file.filename or "unknown",
         )
-        
+
         return {
             "message": "Image uploaded successfully",
             "filename": image.filename,
             "file_size": image.file_size,
             "original_filename": image.original_filename,
             "content_type": image.content_type,
-            "upload_date": image.upload_date.isoformat()
+            "upload_date": image.upload_date.isoformat(),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
-@router.get("/images", 
+
+@router.get(
+    "/images",
     response_model=List[ImageInfo],
     tags=["Images"],
     summary="Get all images for current user",
@@ -547,48 +533,48 @@ async def upload_image(
                             "original_filename": "vacation.jpg",
                             "upload_date": "2024-01-15T10:30:00Z",
                             "file_size": 1024000,
-                            "content_type": "image/jpeg"
+                            "content_type": "image/jpeg",
                         },
                         {
                             "filename": "def456_profile.png",
                             "original_filename": "profile.png",
                             "upload_date": "2024-01-14T15:20:00Z",
                             "file_size": 512000,
-                            "content_type": "image/png"
-                        }
+                            "content_type": "image/png",
+                        },
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
-        }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
     },
-    dependencies=[Security(get_current_user)]
+    dependencies=[Security(get_current_user)],
 )
 async def get_images(
     current_user: User = Depends(get_current_user),
-    image_service: ImageService = Depends(get_image_service)
+    image_service: ImageService = Depends(get_image_service),
 ):
     """
     Get all images uploaded by the current user.
-    
+
     Returns a list of image metadata for all images owned by the authenticated user.
     The actual image files can be accessed via the `/uploads/{filename}` endpoint.
     """
     try:
         return await image_service.get_user_images(current_user.username)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving images: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving images: {str(e)}"
+        )
 
-@router.get("/image/{filename}",
+
+@router.get(
+    "/image/{filename}",
     tags=["Images"],
     summary="Get specific image information",
     description="""
@@ -618,58 +604,50 @@ async def get_images(
                         "file_path": "/uploads/abc123_vacation.jpg",
                         "file_size": 1024000,
                         "content_type": "image/jpeg",
-                        "upload_date": "2024-01-15T10:30:00Z"
+                        "upload_date": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Image not found",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Image not found"
-                    }
-                }
-            }
+            "content": {"application/json": {"example": {"detail": "Image not found"}}},
         },
         401: {
             "description": "Authentication required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+    },
 )
 async def get_image(
     filename: str,
     current_user: User = Depends(get_current_user),
-    image_service: ImageService = Depends(get_image_service)
+    image_service: ImageService = Depends(get_image_service),
 ):
     """
     Get detailed information about a specific image.
-    
+
     Returns complete metadata for the specified image, including file path,
     size, content type, and upload date.
     """
     image = await image_service.get_image(filename, current_user.username)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     return {
         "filename": image.filename,
         "original_filename": image.original_filename,
         "file_path": image.file_path,
         "file_size": image.file_size,
         "content_type": image.content_type,
-        "upload_date": image.upload_date.isoformat()
+        "upload_date": image.upload_date.isoformat(),
     }
 
-@router.delete("/image/{filename}",
+
+@router.delete(
+    "/image/{filename}",
     tags=["Images"],
     summary="Delete an image",
     description="""
@@ -695,57 +673,55 @@ async def get_image(
             "description": "Image deleted successfully",
             "content": {
                 "application/json": {
-                    "example": {
-                        "message": "Image deleted successfully"
-                    }
+                    "example": {"message": "Image deleted successfully"}
                 }
-            }
+            },
         },
         404: {
             "description": "Image not found",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Image not found"
-                    }
-                }
-            }
+            "content": {"application/json": {"example": {"detail": "Image not found"}}},
         },
         401: {
             "description": "Authentication required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+    },
 )
 async def delete_image(
     filename: str,
     current_user: User = Depends(get_current_user),
-    image_service: ImageService = Depends(get_image_service)
+    image_service: ImageService = Depends(get_image_service),
 ):
     """
     Delete a specific image from the server.
-    
+
     Permanently removes the image file and its database record.
     This action cannot be undone.
     """
     success = await image_service.delete_image(filename, current_user.username)
     if not success:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     return {"message": "Image deleted successfully"}
 
-@router.post("/posters/", response_model=Poster, tags=["Posters"], summary="Create a poster (image + message)", dependencies=[Security(get_current_user)])
+
+@router.post(
+    "/posters/",
+    response_model=Poster,
+    tags=["Posters"],
+    summary="Create a poster (image + message)",
+    dependencies=[Security(get_current_user)],
+)
 async def create_poster(
     message: str = Form(..., description="Message for the poster"),
     image: UploadFile = File(..., description="Image file for the poster"),
+    privacy: str = Form(
+        "private", description="Privacy of the post: public or private"
+    ),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
     # Save the image
     upload_dir = "uploads"
@@ -758,7 +734,8 @@ async def create_poster(
     poster = PosterModel(
         username=current_user.username,
         message=message,
-        image_path=image_path
+        image_path=image_path,
+        privacy=privacy,
     )
     db.add(poster)
     await db.commit()
@@ -766,25 +743,69 @@ async def create_poster(
     poster_obj = Poster.from_orm(poster)
     return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
 
-@router.get("/posters/", response_model=List[Poster], tags=["Posters"], summary="Get all posters (paginated)")
+
+@router.get(
+    "/posters/",
+    response_model=List[Poster],
+    tags=["Posters"],
+    summary="Get all posters (paginated)",
+)
 async def get_posters(
     limit: int = 20,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_optional_user),
 ):
-    stmt = select(PosterModel).order_by(desc(PosterModel.created_at)).limit(limit).offset(offset)
+    # Nếu user chưa đăng nhập, chỉ trả về post public
+    username = getattr(current_user, "username", None)
+    if username is not None:
+        # Đã đăng nhập: lấy post public + post community + post private của chính user
+        stmt = (
+            select(PosterModel)
+            .where(
+                or_(
+                    PosterModel.privacy == "public",
+                    PosterModel.privacy == "community",
+                    PosterModel.username == username,
+                )
+            )
+            .order_by(desc(PosterModel.created_at))
+            .limit(limit)
+            .offset(offset)
+        )
+    else:
+        # Chưa đăng nhập: chỉ lấy post public
+        stmt = (
+            select(PosterModel)
+            .where(PosterModel.privacy == "public")
+            .order_by(desc(PosterModel.created_at))
+            .limit(limit)
+            .offset(offset)
+        )
     result = await db.execute(stmt)
     posters = result.scalars().all()
     poster_objs = [Poster.from_orm(p) for p in posters]
-    return [{**po.dict(), "image_path": public_image_path(po.image_path)} for po in poster_objs]
+    return [
+        {**po.dict(), "image_path": public_image_path(po.image_path)}
+        for po in poster_objs
+    ]
 
-@router.patch("/posters/{poster_id}", response_model=Poster, tags=["Posters"], summary="Edit a poster (message and/or image)", dependencies=[Security(get_current_user)])
+
+@router.patch(
+    "/posters/{poster_id}",
+    response_model=Poster,
+    tags=["Posters"],
+    summary="Edit a poster (message and/or image)",
+    dependencies=[Security(get_current_user)],
+)
 async def edit_poster(
     poster_id: int,
     message: str = Form(None, description="New message for the poster"),
-    image: UploadFile = File(None, description="New image file for the poster (optional)"),
+    image: UploadFile = File(
+        None, description="New image file for the poster (optional)"
+    ),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
     # Fetch poster
     poster = await db.get(PosterModel, poster_id)
@@ -813,11 +834,17 @@ async def edit_poster(
     poster_obj = Poster.from_orm(poster)
     return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
 
-@router.delete("/posters/{poster_id}", tags=["Posters"], summary="Delete a poster", dependencies=[Security(get_current_user)])
+
+@router.delete(
+    "/posters/{poster_id}",
+    tags=["Posters"],
+    summary="Delete a poster",
+    dependencies=[Security(get_current_user)],
+)
 async def delete_poster(
     poster_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
     poster = await db.get(PosterModel, poster_id)
     if poster is None:
@@ -830,4 +857,38 @@ async def delete_poster(
         os.remove(image_path_val)
     await db.delete(poster)
     await db.commit()
-    return {"message": "Poster deleted successfully"} 
+    return {"message": "Poster deleted successfully"}
+
+
+@router.get(
+    "/posters/{poster_id}",
+    response_model=Poster,
+    tags=["Posters"],
+    summary="Get poster detail by id",
+)
+async def get_poster_detail(
+    poster_id: int = Path(..., description="ID of the poster"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_optional_user),
+):
+    poster = await db.get(PosterModel, poster_id)
+    if poster is None:
+        raise HTTPException(status_code=404, detail="Poster not found")
+    privacy = str(poster.privacy) if poster.privacy is not None else None
+    if privacy == "public":
+        pass  # ai cũng xem được
+    else:
+        # community hoặc private đều cần đăng nhập
+        if current_user is None:
+            raise HTTPException(
+                status_code=403, detail="You must be logged in to view this poster"
+            )
+        if privacy == "community":
+            pass  # chỉ cần đăng nhập là xem được
+        elif privacy == "private":
+            if current_user.username != poster.username:
+                raise HTTPException(
+                    status_code=451, detail="Not allowed to view this poster (private)"
+                )
+    poster_obj = Poster.from_orm(poster)
+    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}

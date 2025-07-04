@@ -45,6 +45,75 @@ const PostItem = memo(function PostItem({ post, onClick }) {
       />
       <div
         style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          marginBottom: 4,
+          gap: 8,
+          color: "var(--color-on-background, #222)",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 13,
+            color:
+              post.privacy === "public"
+                ? "#1565c0"
+                : post.privacy === "community"
+                  ? "#388e3c"
+                  : "#b71c1c",
+            background:
+              post.privacy === "public"
+                ? "#e3f2fd"
+                : post.privacy === "community"
+                  ? "#e8f5e9"
+                  : "#ffebee",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            borderRadius: 8,
+            padding: "2px 10px",
+            boxShadow: "0 1px 2px #0001",
+          }}
+        >
+          {post.privacy === "public"
+            ? "🌐 Công khai"
+            : post.privacy === "community"
+              ? "👥 Cộng đồng"
+              : "🔒 Riêng tư"}
+        </span>
+        <button
+          type="button"
+          style={{
+            marginLeft: "auto",
+            background: "#e3f2fd",
+            color: "#1565c0",
+            border: "none",
+            borderRadius: 20,
+            padding: "10px 28px",
+            fontWeight: 700,
+            cursor: "pointer",
+            fontSize: 18,
+            boxShadow: "0 2px 8px #2196f322",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            transition: "background 0.2s",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            const url = window.location.origin + "/post/" + post.id;
+            navigator.clipboard.writeText(url);
+            window.alert("Đã copy link bài viết!");
+          }}
+        >
+          <span style={{ fontSize: 22, marginRight: 6 }}>📤</span>{" "}
+          <span>Chia sẻ</span>
+        </button>
+      </div>
+      <div
+        style={{
           display: "flex",
           justifyContent: "space-between",
           width: "100%",

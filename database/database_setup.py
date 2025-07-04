@@ -6,15 +6,17 @@ Minimal Database Setup Script
 """
 import asyncio
 import os
-from dotenv import load_dotenv
 from datetime import datetime
 
-from app.infrastructure.database import init_db, AsyncSessionLocal
-from app.infrastructure.postgresql_repositories import PostgreSQLUserRepository
-from app.core.entities import User, UserStatus
+from dotenv import load_dotenv
 from passlib.context import CryptContext
 
+from app.core.entities import User, UserStatus
+from app.infrastructure.database import AsyncSessionLocal, init_db
+from app.infrastructure.postgresql_repositories import PostgreSQLUserRepository
+
 load_dotenv()
+
 
 async def setup_database():
     print("🗄️ Setting up PostgreSQL database...")
@@ -23,6 +25,7 @@ async def setup_database():
     await create_default_admin()
     print("✅ Default admin user created (admin/admin123)")
     print("🎉 Database setup completed!")
+
 
 async def create_default_admin():
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -40,13 +43,15 @@ async def create_default_admin():
             is_admin=True,
             status=UserStatus.APPROVED,
             approved_at=datetime.utcnow(),
-            approved_by="system"
+            approved_by="system",
         )
         await user_repo.create(admin_user)
         print("👤 Created admin user: admin/admin123")
 
+
 def main():
     asyncio.run(setup_database())
 
+
 if __name__ == "__main__":
-    main() 
+    main()
