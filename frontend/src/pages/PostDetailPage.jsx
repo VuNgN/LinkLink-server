@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import PostDetail from "../components/PostDetail";
-import fetchWithAuth from "../utils/fetchWithAuth";
+import { api } from "../utils/api";
 
 export default function PostDetailPage() {
   const { id } = useParams();
@@ -13,7 +13,8 @@ export default function PostDetailPage() {
   useEffect(() => {
     setLoading(true);
     setError("");
-    fetchWithAuth(`/api/v1/posters/${id}`, {}, navigate)
+    api
+      .get(`/api/v1/posters/${id}`, {}, navigate)
       .then(async (res) => {
         if (res.status === 401) {
           // Chưa đăng nhập, chuyển hướng login kèm redirect

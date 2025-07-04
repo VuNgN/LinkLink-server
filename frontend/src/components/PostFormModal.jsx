@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Modal from "./Modal";
+import { api } from "../utils/api";
 
 export default function PostFormModal({ open, onClose, onSuccess }) {
   const [formImage, setFormImage] = useState(null);
@@ -37,13 +38,7 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
       formData.append("image", formImage);
       formData.append("message", formMessage);
       formData.append("privacy", formPrivacy);
-      const res = await fetch("/api/v1/posters/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-        },
-        body: formData,
-      });
+      const res = await api.post("/api/v1/posters/", formData);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || "Lỗi đăng bài");
@@ -252,3 +247,4 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
     </Modal>
   );
 }
+ 

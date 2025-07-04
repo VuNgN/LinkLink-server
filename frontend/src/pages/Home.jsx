@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import fetchWithAuth from "../utils/fetchWithAuth";
+import { api } from "../utils/api";
 import PostItem from "../components/PostItem";
 import PostDetail from "../components/PostDetail";
 import Modal from "../components/Modal";
@@ -16,12 +16,8 @@ export default function Home() {
   const [selectedPost, setSelectedPost] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-    fetchWithAuth("/api/v1/posters/", {}, navigate)
+    api
+      .get("/api/v1/posters/", {}, navigate)
       .then(async (res) => {
         if (!res.ok) throw new Error("Lỗi tải danh sách bài viết");
         const data = await res.json();
@@ -53,7 +49,9 @@ export default function Home() {
           if (data.event === "new_post") {
             setHasNewPost(true);
           }
-        } catch {}
+        } catch {
+          // ignore
+        }
       };
       ws.onclose = () => {
         if (!closed) setTimeout(connectWS, 2000); // reconnect
@@ -70,7 +68,7 @@ export default function Home() {
   async function reloadPosts() {
     setLoading(true);
     try {
-      const res = await fetchWithAuth("/api/v1/posters/", {}, navigate);
+      const res = await api.get("/api/v1/posters/", {}, navigate);
       if (!res.ok) throw new Error("Lỗi tải danh sách bài viết");
       const data = await res.json();
       setPosts(data);
@@ -126,23 +124,20 @@ export default function Home() {
       >
         <button
           onClick={async () => {
-            const refresh = localStorage.getItem("refresh_token");
-            if (refresh) {
-              try {
-                await fetch("/api/v1/logout", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-                  },
-                  body: JSON.stringify({ refresh_token: refresh }),
-                });
-              } catch {
-                /* ignore */
-              }
+            try {
+              await fetch("/api/v1/logout", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                },
+                credentials: "include",
+              });
+            } catch {
+              // ignore
             }
             localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
+            localStorage.removeItem("username");
             navigate("/login");
           }}
           style={{
@@ -188,11 +183,7 @@ export default function Home() {
               setLoading(true);
               setHasNewPost(false);
               try {
-                const res = await fetchWithAuth(
-                  "/api/v1/posters/",
-                  {},
-                  navigate,
-                );
+                const res = await api.get("/api/v1/posters/", {}, navigate);
                 if (!res.ok) throw new Error("Lỗi tải danh sách bài viết");
                 const data = await res.json();
                 setPosts(data);

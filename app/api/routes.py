@@ -5,10 +5,11 @@ API routes - Presentation layer
 import os
 import shutil
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Path,
-                     Security, UploadFile, status)
+                     Request, Response, Security, UploadFile, status)
+from pydantic import BaseModel
 from sqlalchemy import delete as sqlalchemy_delete
 from sqlalchemy import desc, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,12 @@ from ..core.services import AuthService, ImageService
 from .dependencies import (get_auth_service, get_current_admin_user,
                            get_current_user, get_image_service,
                            get_optional_user)
+
+
+class TokenWithUsername(Token):
+    refresh_token: Optional[str] = None
+    username: str
+
 
 router = APIRouter()
 
@@ -230,7 +237,7 @@ async def get_pending_users(
 
 @router.post(
     "/login",
-    response_model=Token,
+    response_model=TokenWithUsername,
     tags=["Authentication"],
     summary="Login user and get access tokens",
     description="""
@@ -275,7 +282,9 @@ async def get_pending_users(
     },
 )
 async def login(
-    credentials: UserLogin, auth_service: AuthService = Depends(get_auth_service)
+    credentials: UserLogin,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Login user and receive JWT tokens.
@@ -292,7 +301,20 @@ async def login(
     ```
     """
     try:
-        return await auth_service.login_user(credentials)
+        result = await auth_service.login_user(credentials)
+        # Đặt refresh token vào HttpOnly cookie
+        response.set_cookie(
+            key="refresh_token",
+            value=result["refresh_token"],
+            httponly=True,
+            secure=True,  # chỉ nên dùng khi chạy HTTPS
+            samesite="strict",
+            max_age=7 * 24 * 3600,
+            path="/api/v1/refresh",
+        )
+        # Không trả refresh_token trong body nữa
+        result.pop("refresh_token", None)
+        return result
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -303,7 +325,7 @@ async def login(
 
 @router.post(
     "/refresh",
-    response_model=Token,
+    response_model=TokenWithUsername,
     tags=["Authentication"],
     summary="Refresh access token",
     description="""
@@ -342,22 +364,26 @@ async def login(
     },
 )
 async def refresh_token(
-    request: RefreshTokenRequest, auth_service: AuthService = Depends(get_auth_service)
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
 ):
-    """
-    Refresh access token using refresh token.
-
-    **Example Request:**
-    ```json
-    {
-        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-    }
-    ```
-    """
-    try:
-        return await auth_service.refresh_access_token(request.refresh_token)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token in cookie")
+    result = await auth_service.refresh_access_token(refresh_token)
+    # Đặt lại refresh token mới vào cookie
+    response.set_cookie(
+        key="refresh_token",
+        value=result["refresh_token"],
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+        path="/api/v1/refresh",
+    )
+    result.pop("refresh_token", None)
+    return result
 
 
 @router.post(
@@ -383,21 +409,16 @@ async def refresh_token(
     },
 )
 async def logout(
-    request: LogoutRequest,
+    request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ):
-    """
-    Logout the current user and invalidate tokens.
-
-    **Example Request:**
-    ```json
-    {
-        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-    }
-    ```
-    """
-    await auth_service.logout_user(request.refresh_token, current_user.username)
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        await auth_service.logout_user(refresh_token, current_user.username)
+    # Xóa cookie
+    response.delete_cookie(key="refresh_token", path="/api/v1/refresh")
     return {"message": "Logged out successfully"}
 
 
