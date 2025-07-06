@@ -1,6 +1,6 @@
 import React from "react";
 
-function PostDetail({ post }) {
+function PostDetail({ post, onEdit, onDelete }) {
   if (!post) return null;
   let imageUrl = post.image_path;
   if (imageUrl && !imageUrl.startsWith("/uploads/")) {
@@ -12,6 +12,21 @@ function PostDetail({ post }) {
     const d = new Date(post.created_at);
     createdAt = d.toLocaleString(undefined, { hour12: false });
   }
+  // Get current user
+  const currentUsername =
+    localStorage.getItem("username") ||
+    (() => {
+      try {
+        const token = localStorage.getItem("access_token");
+        if (!token) return "";
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        return payload.username || "";
+      } catch {
+        return "";
+      }
+    })();
+  const isOwner = post.username === currentUsername;
+
   return (
     <div
       style={{
@@ -76,6 +91,40 @@ function PostDetail({ post }) {
       <div style={{ color: "#888", fontSize: 15, marginBottom: 16 }}>
         👤 {post.username}
       </div>
+      {isOwner && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          <button
+            onClick={onEdit}
+            style={{
+              background: "#7C4DFF",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 20px",
+              fontSize: 16,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Chỉnh sửa
+          </button>
+          <button
+            onClick={onDelete}
+            style={{
+              background: "#ff5252",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 20px",
+              fontSize: 16,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Xoá bài viết
+          </button>
+        </div>
+      )}
       <div
         style={{
           display: "flex",

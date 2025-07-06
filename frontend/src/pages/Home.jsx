@@ -14,6 +14,10 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false);
   const [hasNewPost, setHasNewPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [postToEdit, setPostToEdit] = useState(null);
+  const [postToDelete, setPostToDelete] = useState(null);
 
   useEffect(() => {
     api
@@ -79,6 +83,40 @@ export default function Home() {
     }
   }
 
+  // Handle edit post
+  const handleEdit = (post) => {
+    setPostToEdit(post);
+    setShowEdit(true);
+    setSelectedPost(null); // Close the detail modal
+  };
+
+  // Handle delete post
+  const handleDelete = (post) => {
+    setPostToDelete(post);
+    setShowDeleteConfirm(true);
+    setSelectedPost(null); // Close the detail modal
+  };
+
+  // Confirm delete
+  const confirmDelete = async () => {
+    if (!postToDelete) return;
+
+    setError("");
+    try {
+      const res = await api.delete(`/api/v1/posters/${postToDelete.id}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Lỗi xoá bài viết");
+      }
+      // Remove the deleted post from the list
+      setPosts(posts.filter((p) => p.id !== postToDelete.id));
+      setShowDeleteConfirm(false);
+      setPostToDelete(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   if (loading)
     return (
       <div style={{ textAlign: "center", marginTop: 40 }}>Đang tải...</div>
@@ -122,52 +160,69 @@ export default function Home() {
           padding: 16,
         }}
       >
-        <button
-          onClick={async () => {
-            try {
-              await fetch("/api/v1/logout", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-                },
-                credentials: "include",
-              });
-            } catch {
-              // ignore
-            }
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("username");
-            navigate("/login");
-          }}
-          style={{
-            background: "var(--color-primary, #7C4DFF)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 20px",
-            fontSize: 16,
-            cursor: "pointer",
-            fontWeight: 500,
-          }}
-        >
-          Đăng xuất
-        </button>
-        <button
-          onClick={() => setShowForm(true)}
-          style={{
-            background: "var(--color-secondary, #00BFAE)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 20px",
-            fontSize: 16,
-            cursor: "pointer",
-            fontWeight: 500,
-          }}
-        >
-          Đăng bài viết
-        </button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            onClick={async () => {
+              try {
+                await fetch("/api/v1/logout", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                  },
+                  credentials: "include",
+                });
+              } catch {
+                // ignore
+              }
+              localStorage.removeItem("access_token");
+              localStorage.removeItem("username");
+              navigate("/login");
+            }}
+            style={{
+              background: "var(--color-primary, #7C4DFF)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 20px",
+              fontSize: 16,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Đăng xuất
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            style={{
+              background: "var(--color-secondary, #00BFAE)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 20px",
+              fontSize: 16,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Đăng bài viết
+          </button>
+          <button
+            onClick={() => navigate("/trash")}
+            style={{
+              background: "#757575",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 20px",
+              fontSize: 16,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Thùng rác
+          </button>
+        </div>
       </div>
       {/* Popup đăng bài viết */}
       <PostFormModal
@@ -219,9 +274,89 @@ export default function Home() {
           />
         ))}
         <Modal open={!!selectedPost} onClose={() => setSelectedPost(null)}>
-          {selectedPost && <PostDetail post={selectedPost} />}
+          {selectedPost && (
+            <PostDetail
+              post={selectedPost}
+              onEdit={() => handleEdit(selectedPost)}
+              onDelete={() => handleDelete(selectedPost)}
+            />
+          )}
         </Modal>
       </div>
+
+      {/* Edit Modal */}
+      {showEdit && postToEdit && (
+        <PostFormModal
+          open={showEdit}
+          onClose={() => {
+            setShowEdit(false);
+            setPostToEdit(null);
+          }}
+          onSuccess={() => {
+            setShowEdit(false);
+            setPostToEdit(null);
+            reloadPosts(); // Reload to get updated post
+          }}
+          post={postToEdit}
+          mode="edit"
+        />
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && (
+        <Modal
+          open={showDeleteConfirm}
+          onClose={() => {
+            setShowDeleteConfirm(false);
+            setPostToDelete(null);
+          }}
+        >
+          <div style={{ padding: 24, maxWidth: 400 }}>
+            <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 16 }}>
+              Xác nhận xoá bài viết
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              Bạn có chắc chắn muốn xoá bài viết này không? Bài viết sẽ được
+              chuyển vào thùng rác và có thể khôi phục hoặc xoá vĩnh viễn sau
+              này.
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setPostToDelete(null);
+                }}
+                style={{
+                  background: "#eee",
+                  color: "#222",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 20px",
+                  fontSize: 16,
+                  cursor: "pointer",
+                }}
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  background: "#ff5252",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 20px",
+                  fontSize: 16,
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Xoá
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

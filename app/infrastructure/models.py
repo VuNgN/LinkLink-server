@@ -67,3 +67,26 @@ class PosterModel(Base):
     privacy = Column(
         Enum("public", "community", "private", name="privacyenum"), default="private"
     )
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ArchivedPosterModel(Base):
+    """Archived poster model for permanently deleted posts (metadata only)"""
+
+    __tablename__ = "archived_posters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_id = Column(Integer, nullable=False, index=True)  # Original poster ID
+    username = Column(String(50), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    original_image_path = Column(
+        String(500), nullable=False
+    )  # Original image path (for reference)
+    image_filename = Column(String(255), nullable=False)  # Just the filename
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=False)  # When soft deleted
+    archived_at = Column(
+        DateTime(timezone=True), server_default=func.now()
+    )  # When hard deleted
+    privacy = Column(String(20), nullable=False)  # Original privacy setting

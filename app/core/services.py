@@ -15,8 +15,10 @@ from pydantic import EmailStr
 from .entities import (AdminApprovalRequest, Image, ImageInfo, PendingUserInfo,
                        RefreshTokenRequest, Token, User, UserCreate, UserLogin,
                        UserRegistrationResponse, UserStatus)
-from .interfaces import (FileStorage, ImageRepository, RefreshTokenRepository,
-                         TokenRepository, UserRepository)
+from .interfaces import (ArchivedPosterRepository, FileStorage,
+                         ImageRepository, PosterRepository,
+                         RefreshTokenRepository, TokenRepository,
+                         UserRepository)
 
 
 class EmailService:
@@ -420,3 +422,100 @@ class ImageService:
 
         # Delete from repository
         return await self.image_repo.delete(filename)
+
+
+class PosterService:
+    """Poster management business logic"""
+
+    def __init__(
+        self,
+        poster_repo: PosterRepository,
+        archived_repo: ArchivedPosterRepository,
+        file_storage: FileStorage,
+        upload_dir: str = "uploads",
+    ):
+        self.poster_repo = poster_repo
+        self.archived_repo = archived_repo
+        self.file_storage = file_storage
+        self.upload_dir = upload_dir
+
+    async def edit_poster(
+        self,
+        poster_id: int,
+        username: str,
+        message: str = None,
+        image_content: bytes = None,
+        image_filename: str = None,
+        privacy: str = None,
+    ):
+        poster = await self.poster_repo.get_by_id(poster_id)
+        if not poster:
+            raise ValueError("Poster not found")
+        if poster.username != username:
+            raise ValueError("Not allowed to edit this poster")
+        if poster.is_deleted:
+            raise ValueError("Cannot edit a deleted poster")
+        # Update message
+        if message is not None:
+            poster.message = message
+        # Update privacy
+        if privacy is not None:
+            poster.privacy = privacy
+        # Update image if provided
+        if image_content is not None and image_filename is not None:
+            # Remove old image file
+            if poster.image_path:
+                await self.file_storage.delete_file(poster.image_path)
+            # Save new image
+            new_image_path = await self.file_storage.save_file(
+                image_content, f"{username}_{image_filename}"
+            )
+            poster.image_path = new_image_path
+        await self.poster_repo.update(poster)
+        return poster
+
+    async def delete_poster(self, poster_id: int, username: str):
+        poster = await self.poster_repo.get_by_id(poster_id)
+        if not poster:
+            raise ValueError("Poster not found")
+        if poster.username != username:
+            raise ValueError("Not allowed to delete this poster")
+        if poster.is_deleted:
+            raise ValueError("Poster already deleted")
+        await self.poster_repo.delete(poster_id)
+        return True
+
+    async def get_deleted_posts(self, username: str):
+        return await self.poster_repo.get_deleted(username)
+
+    async def hard_delete_post(self, poster_id: int, username: str):
+        poster = await self.poster_repo.get_by_id(poster_id)
+        if not poster:
+            raise ValueError("Poster not found")
+        if poster.username != username:
+            raise ValueError("Not allowed to hard delete this poster")
+        if not poster.is_deleted:
+            raise ValueError("Poster must be deleted first (in trash)")
+        # Remove image file
+        if poster.image_path:
+            await self.file_storage.delete_file(poster.image_path)
+        # Archive and hard delete, and return the archived poster
+        archived = await self.poster_repo.archive_and_hard_delete(
+            poster_id, self.archived_repo
+        )
+        if not archived:
+            raise ValueError("Failed to archive poster")
+        return archived
+
+    async def hard_delete_all_deleted(self, username: str):
+        deleted_posts = await self.poster_repo.get_deleted(username)
+        for poster in deleted_posts:
+            if poster.image_path:
+                await self.file_storage.delete_file(poster.image_path)
+        count = await self.poster_repo.archive_and_hard_delete_all_deleted(
+            username, self.archived_repo
+        )
+        return count
+
+    async def get_archived_posts(self, username: str):
+        return await self.archived_repo.get_by_username(username)

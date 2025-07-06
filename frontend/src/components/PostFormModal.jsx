@@ -2,13 +2,35 @@ import React, { useState } from "react";
 import Modal from "./Modal";
 import { api } from "../utils/api";
 
-export default function PostFormModal({ open, onClose, onSuccess }) {
+export default function PostFormModal({
+  open,
+  onClose,
+  onSuccess,
+  post = null,
+  mode = "create",
+}) {
   const [formImage, setFormImage] = useState(null);
-  const [formImageUrl, setFormImageUrl] = useState("");
-  const [formMessage, setFormMessage] = useState("");
-  const [formPrivacy, setFormPrivacy] = useState("public");
+  const [formImageUrl, setFormImageUrl] = useState(post ? post.image_path : "");
+  const [formMessage, setFormMessage] = useState(post ? post.message : "");
+  const [formPrivacy, setFormPrivacy] = useState(
+    post ? post.privacy : "public",
+  );
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
+
+  React.useEffect(() => {
+    if (post) {
+      setFormMessage(post.message || "");
+      setFormPrivacy(post.privacy || "public");
+      setFormImageUrl(post.image_path || "");
+      setFormImage(null);
+    } else {
+      setFormMessage("");
+      setFormPrivacy("public");
+      setFormImageUrl("");
+      setFormImage(null);
+    }
+  }, [post, open]);
 
   function handleImageChange(e) {
     const file = e.target.files[0];
@@ -17,14 +39,14 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
       const url = URL.createObjectURL(file);
       setFormImageUrl(url);
     } else {
-      setFormImageUrl("");
+      setFormImageUrl(post ? post.image_path : "");
     }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
-    if (!formImage) {
+    if (mode === "create" && !formImage) {
       setFormError("Vui lòng chọn ảnh!");
       return;
     }
@@ -35,13 +57,21 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
     setFormLoading(true);
     try {
       const formData = new FormData();
-      formData.append("image", formImage);
+      if (formImage) formData.append("image", formImage);
       formData.append("message", formMessage);
       formData.append("privacy", formPrivacy);
-      const res = await api.post("/api/v1/posters/", formData);
+      let res;
+      if (mode === "edit" && post) {
+        res = await api.patch(`/api/v1/posters/${post.id}`, formData);
+      } else {
+        res = await api.post("/api/v1/posters/", formData);
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Lỗi đăng bài");
+        throw new Error(
+          data.detail ||
+            (mode === "edit" ? "Lỗi cập nhật bài viết" : "Lỗi đăng bài"),
+        );
       }
       setFormImage(null);
       setFormImageUrl("");
@@ -83,7 +113,7 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
             color: "var(--color-on-background, #222)",
           }}
         >
-          Đăng bài viết mới
+          {mode === "edit" ? "Chỉnh sửa bài viết" : "Đăng bài viết mới"}
         </div>
         <input
           type="file"
@@ -240,11 +270,16 @@ export default function PostFormModal({ open, onClose, onSuccess }) {
             }}
             disabled={formLoading}
           >
-            {formLoading ? "Đang đăng..." : "Đăng bài"}
+            {formLoading
+              ? mode === "edit"
+                ? "Đang lưu..."
+                : "Đang đăng..."
+              : mode === "edit"
+                ? "Lưu thay đổi"
+                : "Đăng bài"}
           </button>
         </div>
       </form>
     </Modal>
   );
 }
- 
