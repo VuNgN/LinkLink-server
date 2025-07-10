@@ -526,3 +526,12 @@ class PostgreSQLPosterRepository(PosterRepository):
 
         await self.session.commit()
         return count
+
+    async def restore(self, poster_id: int, username: str) -> bool:
+        db_poster = await self.session.get(PosterModel, poster_id)
+        if not db_poster or db_poster.username != username or not db_poster.is_deleted:
+            return False
+        db_poster.is_deleted = False
+        db_poster.deleted_at = None
+        await self.session.commit()
+        return True

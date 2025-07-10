@@ -146,6 +146,41 @@ export default function Trash() {
               >
                 Xoá vĩnh viễn
               </button>
+              <button
+                onClick={async () => {
+                  setError("");
+                  try {
+                    setLoading(true);
+                    const res = await api.patch(
+                      `/api/v1/posters/${post.id}/restore`,
+                    );
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}));
+                      throw new Error(data.detail || "Lỗi khôi phục bài viết");
+                    }
+                    reload();
+                  } catch (e) {
+                    setError(e.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 120,
+                  background: "#4caf50",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "6px 16px",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Khôi phục
+              </button>
             </div>
           ))}
         </div>
