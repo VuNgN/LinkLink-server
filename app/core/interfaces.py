@@ -153,6 +153,11 @@ class PosterRepository(ABC):
         pass
 
     @abstractmethod
+    async def restore(self, poster_id: int, username: str) -> bool:
+        """Restore a soft-deleted poster (set is_deleted to False)"""
+        pass
+
+    @abstractmethod
     async def get_deleted(self, username: str) -> list:
         """Get all deleted posters for a user"""
         pass

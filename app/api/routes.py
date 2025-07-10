@@ -815,7 +815,7 @@ async def get_posters(
             )
     else:
         current_user = None
-    
+
     # Nếu user chưa đăng nhập, chỉ trả về post public
     username = getattr(current_user, "username", None)
     if username is not None:
@@ -1023,7 +1023,7 @@ async def get_poster_detail(
             )
     else:
         current_user = None
-    
+
     poster = await db.get(PosterModel, poster_id)
     if poster is None:
         raise HTTPException(status_code=404, detail="Poster not found")
@@ -1069,6 +1069,30 @@ async def hard_delete_single_deleted_poster(
             poster_id, current_user.username
         )
         return archived
+    except ValueError as e:
+        raise HTTPException(
+            status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)
+        )
+
+
+@router.patch(
+    "/posters/{poster_id}/restore",
+    tags=["Posters", "Trash"],
+    summary="Restore a deleted (trashed) poster",
+    description="""
+    Restore a soft-deleted (trashed) poster for the current user. This sets is_deleted to False and removes deleted_at.
+    Only the post owner can perform this action, and only if the post is currently deleted.
+    """,
+    dependencies=[Security(get_current_user)],
+)
+async def restore_deleted_poster(
+    poster_id: int,
+    current_user: User = Depends(get_current_user),
+    poster_service=Depends(get_poster_service),
+):
+    try:
+        poster = await poster_service.restore_post(poster_id, current_user.username)
+        return {**poster.dict(), "image_path": public_image_path(poster.image_path)}
     except ValueError as e:
         raise HTTPException(
             status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)

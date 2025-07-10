@@ -528,3 +528,17 @@ class PosterService:
 
     async def get_archived_posts(self, username: str):
         return await self.archived_repo.get_by_username(username)
+
+    async def restore_post(self, poster_id: int, username: str):
+        poster = await self.poster_repo.get_by_id(poster_id)
+        if not poster:
+            raise ValueError("Poster not found")
+        if poster.username != username:
+            raise ValueError("Not allowed to restore this poster")
+        if not poster.is_deleted:
+            raise ValueError("Poster is not deleted")
+        success = await self.poster_repo.restore(poster_id, username)
+        if not success:
+            raise ValueError("Failed to restore poster")
+        # Return the restored poster
+        return await self.poster_repo.get_by_id(poster_id)

@@ -182,7 +182,7 @@ async def get_optional_user(
     scheme, param = get_authorization_scheme_param(auth)
     if not auth or scheme.lower() != "bearer" or not param:
         return None
-    
+
     # Check if token is valid (not expired)
     try:
         username = auth_service.verify_token(param)
