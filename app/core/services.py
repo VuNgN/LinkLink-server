@@ -272,7 +272,7 @@ class AuthService:
             if username is None:
                 raise ValueError("Invalid token")
             return username
-        except JWTError:
+        except Exception:
             raise ValueError("Invalid token")
 
     async def refresh_access_token(self, refresh_token: str) -> dict:
@@ -298,6 +298,15 @@ class AuthService:
         # Create new tokens
         new_access_token = self._create_access_token(username, user.is_admin)
         new_refresh_token = self._create_refresh_token(username, user.is_admin)
+
+        # Store new refresh token and delete old one
+        await self.refresh_token_repository.delete_by_token(refresh_token)
+        await self.refresh_token_repository.create(
+            token=new_refresh_token,
+            username=username,
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(days=self.refresh_token_expire_days),
+        )
 
         return {
             "access_token": new_access_token,
