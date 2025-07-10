@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Path,
                      Request, Response, Security, UploadFile, status)
+from fastapi.security.utils import get_authorization_scheme_param
 from pydantic import BaseModel
 from sqlalchemy import delete as sqlalchemy_delete
 from sqlalchemy import desc, or_, select, update
@@ -307,10 +308,10 @@ async def login(
             key="refresh_token",
             value=result["refresh_token"],
             httponly=True,
-            secure=True,  # chỉ nên dùng khi chạy HTTPS
-            samesite="strict",
+            secure=True,  # Set to False for development, should be True in production with HTTPS
+            samesite="lax",  # Changed from "strict" to "lax" for better compatibility
             max_age=7 * 24 * 3600,
-            path="/api/v1/refresh",
+            path="/",  # Changed from "/api/v1/refresh" to "/" to make it available for all paths
         )
         # Không trả refresh_token trong body nữa
         result.pop("refresh_token", None)
@@ -377,10 +378,10 @@ async def refresh_token(
         key="refresh_token",
         value=result["refresh_token"],
         httponly=True,
-        secure=True,
-        samesite="strict",
+        secure=False,
+        samesite="lax",
         max_age=7 * 24 * 3600,
-        path="/api/v1/refresh",
+        path="/",
     )
     result.pop("refresh_token", None)
     return result
@@ -418,7 +419,7 @@ async def logout(
     if refresh_token:
         await auth_service.logout_user(refresh_token, current_user.username)
     # Xóa cookie
-    response.delete_cookie(key="refresh_token", path="/api/v1/refresh")
+    response.delete_cookie(key="refresh_token", path="/")
     return {"message": "Logged out successfully"}
 
 
@@ -779,11 +780,42 @@ async def create_poster(
     summary="Get all posters (paginated)",
 )
 async def get_posters(
+    request: Request,
     limit: int = 20,
     offset: int = 0,
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_optional_user),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
+    # Check if user is authenticated with valid token
+    current_user = None
+    auth = request.headers.get("Authorization")
+    if auth:
+        scheme, param = get_authorization_scheme_param(auth)
+        if scheme.lower() == "bearer" and param:
+            try:
+                username = auth_service.verify_token(param)
+                user = await auth_service.user_repository.get_by_username(username)
+                if user and user.is_active and user.status.value == "approved":
+                    current_user = user
+                else:
+                    # Token is valid but user is not active/approved
+                    raise Exception("Inactive or unapproved user")
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token expired or invalid",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        else:
+            # Authorization header present but not Bearer
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authorization header",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        current_user = None
+    
     # Nếu user chưa đăng nhập, chỉ trả về post public
     username = getattr(current_user, "username", None)
     if username is not None:
@@ -895,10 +927,41 @@ async def delete_poster(
     summary="Get poster detail by id",
 )
 async def get_poster_detail(
+    request: Request,
     poster_id: int = Path(..., description="ID of the poster"),
     db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_optional_user),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
+    # Check if user is authenticated with valid token
+    current_user = None
+    auth = request.headers.get("Authorization")
+    if auth:
+        scheme, param = get_authorization_scheme_param(auth)
+        if scheme.lower() == "bearer" and param:
+            try:
+                username = auth_service.verify_token(param)
+                user = await auth_service.user_repository.get_by_username(username)
+                if user and user.is_active and user.status.value == "approved":
+                    current_user = user
+                else:
+                    # Token is valid but user is not active/approved
+                    raise Exception("Inactive or unapproved user")
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token expired or invalid",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        else:
+            # Authorization header present but not Bearer
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authorization header",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        current_user = None
+    
     poster = await db.get(PosterModel, poster_id)
     if poster is None:
         raise HTTPException(status_code=404, detail="Poster not found")

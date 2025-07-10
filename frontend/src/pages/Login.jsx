@@ -30,7 +30,7 @@ export default function Login() {
       if (!res.ok) throw new Error("Lỗi đăng nhập");
       const data = await res.json();
       localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
+      // Remove refresh_token storage since it's now handled by HttpOnly cookies
       localStorage.setItem("username", data.username);
       // Nếu có redirect thì chuyển về đó, không thì về home
       if (redirect) {
