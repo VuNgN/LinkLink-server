@@ -11,10 +11,12 @@ from fastapi.security.utils import get_authorization_scheme_param
 from fastapi_mail import ConnectionConfig
 
 from ..core.entities import User
-from ..core.services import AuthService, EmailService, ImageService
+from ..core.services import (AuthService, EmailService, ImageService,
+                             PosterService)
 from ..infrastructure.database import AsyncSession, get_db_session
 from ..infrastructure.postgresql_repositories import (
-    PostgreSQLImageRepository, PostgreSQLRefreshTokenRepository,
+    PostgreSQLArchivedPosterRepository, PostgreSQLImageRepository,
+    PostgreSQLPosterRepository, PostgreSQLRefreshTokenRepository,
     PostgreSQLTokenRepository, PostgreSQLUserRepository)
 from ..infrastructure.repositories import LocalFileStorage
 
@@ -68,6 +70,20 @@ async def get_refresh_token_repository(
     return PostgreSQLRefreshTokenRepository(session)
 
 
+async def get_poster_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> PostgreSQLPosterRepository:
+    """Get poster repository with database session"""
+    return PostgreSQLPosterRepository(session)
+
+
+async def get_archived_poster_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> PostgreSQLArchivedPosterRepository:
+    """Get archived poster repository with database session"""
+    return PostgreSQLArchivedPosterRepository(session)
+
+
 def get_file_storage() -> LocalFileStorage:
     """Get file storage instance"""
     return _file_storage
@@ -107,6 +123,22 @@ async def get_image_service(
         upload_dir="uploads",
         max_file_size=10 * 1024 * 1024,  # 10MB
         allowed_types=["image/jpeg", "image/png", "image/gif", "image/webp"],
+    )
+
+
+async def get_poster_service(
+    poster_repo: PostgreSQLPosterRepository = Depends(get_poster_repository),
+    archived_repo: PostgreSQLArchivedPosterRepository = Depends(
+        get_archived_poster_repository
+    ),
+    file_storage: LocalFileStorage = Depends(get_file_storage),
+) -> PosterService:
+    """Get poster service instance with PostgreSQL repositories"""
+    return PosterService(
+        poster_repo=poster_repo,
+        archived_repo=archived_repo,
+        file_storage=file_storage,
+        upload_dir="uploads",
     )
 
 

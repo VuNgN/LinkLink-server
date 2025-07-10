@@ -19,14 +19,14 @@ from app.infrastructure.database import get_db_session
 from app.infrastructure.models import PosterModel
 from app.infrastructure.notifier import post_notifier
 
-from ..core.entities import (AdminApprovalRequest, ImageInfo, LogoutRequest,
-                             PendingUserInfo, Poster, RefreshTokenRequest,
-                             Token, User, UserCreate, UserLogin,
-                             UserRegistrationResponse)
+from ..core.entities import (AdminApprovalRequest, ArchivedPoster, ImageInfo,
+                             LogoutRequest, PendingUserInfo, Poster,
+                             RefreshTokenRequest, Token, User, UserCreate,
+                             UserLogin, UserRegistrationResponse)
 from ..core.services import AuthService, ImageService
 from .dependencies import (get_auth_service, get_current_admin_user,
                            get_current_user, get_image_service,
-                           get_optional_user)
+                           get_optional_user, get_poster_service)
 
 
 class TokenWithUsername(Token):
@@ -819,25 +819,26 @@ async def get_posters(
     # Nếu user chưa đăng nhập, chỉ trả về post public
     username = getattr(current_user, "username", None)
     if username is not None:
-        # Đã đăng nhập: lấy post public + post community + post private của chính user
+        # Đã đăng nhập: lấy post public + post community + post private của chính user, chỉ lấy post chưa bị xóa
         stmt = (
             select(PosterModel)
             .where(
                 or_(
-                    PosterModel.privacy == "public",
-                    PosterModel.privacy == "community",
-                    PosterModel.username == username,
-                )
+                    (PosterModel.privacy == "public"),
+                    (PosterModel.privacy == "community"),
+                    (PosterModel.username == username),
+                ),
+                PosterModel.is_deleted == False,
             )
             .order_by(desc(PosterModel.created_at))
             .limit(limit)
             .offset(offset)
         )
     else:
-        # Chưa đăng nhập: chỉ lấy post public
+        # Chưa đăng nhập: chỉ lấy post public, chưa bị xóa
         stmt = (
             select(PosterModel)
-            .where(PosterModel.privacy == "public")
+            .where((PosterModel.privacy == "public"), PosterModel.is_deleted == False)
             .order_by(desc(PosterModel.created_at))
             .limit(limit)
             .offset(offset)
@@ -855,7 +856,7 @@ async def get_posters(
     "/posters/{poster_id}",
     response_model=Poster,
     tags=["Posters"],
-    summary="Edit a poster (message and/or image)",
+    summary="Edit a poster (message and/or image and/or privacy)",
     dependencies=[Security(get_current_user)],
 )
 async def edit_poster(
@@ -864,35 +865,31 @@ async def edit_poster(
     image: UploadFile = File(
         None, description="New image file for the poster (optional)"
     ),
+    privacy: str = Form(
+        None, description="New privacy setting: public, community, or private"
+    ),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    poster_service=Depends(get_poster_service),
 ):
-    # Fetch poster
-    poster = await db.get(PosterModel, poster_id)
-    if poster is None:
-        raise HTTPException(status_code=404, detail="Poster not found")
-    if getattr(poster, "username", None) != current_user.username:
-        raise HTTPException(status_code=403, detail="Not allowed to edit this poster")
-    # Update message
-    if message is not None:
-        setattr(poster, "message", message)
-    # Update image if provided
+    image_content = None
+    image_filename = None
     if image is not None:
-        # Remove old image file
-        image_path_val = str(getattr(poster, "image_path", ""))
-        if image_path_val and os.path.exists(image_path_val):
-            os.remove(image_path_val)
-        upload_dir = "uploads"
-        os.makedirs(upload_dir, exist_ok=True)
-        image_filename = f"{current_user.username}_{image.filename}"
-        image_path = os.path.join(upload_dir, image_filename)
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
-        setattr(poster, "image_path", image_path)
-    await db.commit()
-    await db.refresh(poster)
-    poster_obj = Poster.from_orm(poster)
-    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
+        image_content = await image.read()
+        image_filename = image.filename
+    try:
+        poster = await poster_service.edit_poster(
+            poster_id=poster_id,
+            username=current_user.username,
+            message=message,
+            image_content=image_content,
+            image_filename=image_filename,
+            privacy=privacy,
+        )
+        return {**poster.dict(), "image_path": public_image_path(poster.image_path)}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)
+        )
 
 
 @router.delete(
@@ -904,20 +901,85 @@ async def edit_poster(
 async def delete_poster(
     poster_id: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    poster_service=Depends(get_poster_service),
 ):
-    poster = await db.get(PosterModel, poster_id)
-    if poster is None:
-        raise HTTPException(status_code=404, detail="Poster not found")
-    if getattr(poster, "username", None) != current_user.username:
-        raise HTTPException(status_code=403, detail="Not allowed to delete this poster")
-    # Remove image file
-    image_path_val = str(getattr(poster, "image_path", ""))
-    if image_path_val and os.path.exists(image_path_val):
-        os.remove(image_path_val)
-    await db.delete(poster)
-    await db.commit()
-    return {"message": "Poster deleted successfully"}
+    try:
+        await poster_service.delete_poster(poster_id, current_user.username)
+        return {"message": "Poster deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)
+        )
+
+
+@router.get(
+    "/posters/deleted",
+    response_model=List[Poster],
+    tags=["Posters", "Trash"],
+    summary="Get all deleted (trashed) posters for current user",
+    description="""
+    Retrieve all posts that have been soft deleted (moved to trash) by the current user.
+    These posts can be restored or permanently deleted (hard delete).
+    """,
+    dependencies=[Security(get_current_user)],
+)
+async def get_deleted_posters(
+    current_user: User = Depends(get_current_user),
+    poster_service=Depends(get_poster_service),
+):
+    """
+    Get all deleted (trashed) posters for the current user.
+    Returns a list of posts that are in the trash (soft deleted, not yet permanently removed).
+    """
+    deleted = await poster_service.get_deleted_posts(current_user.username)
+    return [
+        {**po.dict(), "image_path": public_image_path(po.image_path)} for po in deleted
+    ]
+
+
+@router.delete(
+    "/posters/deleted/hard",
+    tags=["Posters", "Trash"],
+    summary="Permanently delete all deleted posters (empty trash)",
+    description="""
+    Permanently delete all posts in the trash for the current user.
+    This will archive the metadata for all deleted posts and remove their image files.
+    """,
+    dependencies=[Security(get_current_user)],
+)
+async def hard_delete_all_deleted_posters(
+    current_user: User = Depends(get_current_user),
+    poster_service=Depends(get_poster_service),
+):
+    """
+    Permanently delete all posts from the trash (hard delete).
+    All posts' metadata will be archived, and image files will be removed.
+    """
+    count = await poster_service.hard_delete_all_deleted(current_user.username)
+    return {"message": f"{count} deleted posters permanently removed"}
+
+
+@router.get(
+    "/posters/archived",
+    response_model=List[ArchivedPoster],
+    tags=["Posters", "Archive"],
+    summary="Get all archived (permanently deleted) posters metadata for current user",
+    description="""
+    Retrieve all archived posts metadata for the current user.
+    These are posts that have been permanently deleted (hard deleted) and only metadata is preserved.
+    """,
+    dependencies=[Security(get_current_user)],
+)
+async def get_archived_posters(
+    current_user: User = Depends(get_current_user),
+    poster_service=Depends(get_poster_service),
+):
+    """
+    Get all archived (permanently deleted) posters metadata for the current user.
+    Returns a list of archived post metadata (no image files).
+    """
+    archived = await poster_service.get_archived_posts(current_user.username)
+    return archived
 
 
 @router.get(
@@ -983,3 +1045,31 @@ async def get_poster_detail(
                 )
     poster_obj = Poster.from_orm(poster)
     return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
+
+
+@router.delete(
+    "/posters/{poster_id}/hard",
+    tags=["Posters", "Trash"],
+    summary="Permanently delete a single deleted poster (hard delete)",
+    description="""
+    Permanently delete a single post from the trash for the current user.
+    This will archive the metadata for the deleted post and remove its image file.
+    Only the post owner can perform this action, and only if the post is already soft deleted.
+    """,
+    response_model=ArchivedPoster,
+    dependencies=[Security(get_current_user)],
+)
+async def hard_delete_single_deleted_poster(
+    poster_id: int,
+    current_user: User = Depends(get_current_user),
+    poster_service=Depends(get_poster_service),
+):
+    try:
+        archived = await poster_service.hard_delete_post(
+            poster_id, current_user.username
+        )
+        return archived
+    except ValueError as e:
+        raise HTTPException(
+            status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)
+        )

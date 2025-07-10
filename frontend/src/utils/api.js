@@ -7,6 +7,8 @@ export const api = {
     fetchWithAuth(url, { ...options, method: "POST", body }, navigate),
   put: (url, body, navigate, options = {}) =>
     fetchWithAuth(url, { ...options, method: "PUT", body }, navigate),
+  patch: (url, body, navigate, options = {}) =>
+    fetchWithAuth(url, { ...options, method: "PATCH", body }, navigate),
   delete: (url, navigate, options = {}) =>
     fetchWithAuth(url, { ...options, method: "DELETE" }, navigate),
 };
