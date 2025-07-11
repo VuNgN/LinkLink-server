@@ -10,15 +10,18 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.security.utils import get_authorization_scheme_param
 from fastapi_mail import ConnectionConfig
 
+from ..config import settings
 from ..core.entities import User
 from ..core.services import (AuthService, EmailService, ImageService,
                              PosterService)
 from ..infrastructure.database import AsyncSession, get_db_session
-from ..infrastructure.postgresql_repositories import (
-    PostgreSQLArchivedPosterRepository, PostgreSQLImageRepository,
-    PostgreSQLPosterRepository, PostgreSQLRefreshTokenRepository,
-    PostgreSQLTokenRepository, PostgreSQLUserRepository)
-from ..infrastructure.repositories import LocalFileStorage
+from ..infrastructure.repositories import (LocalFileStorage,
+                                           PostgreSQLArchivedPosterRepository,
+                                           PostgreSQLImageRepository,
+                                           PostgreSQLPosterRepository,
+                                           PostgreSQLRefreshTokenRepository,
+                                           PostgreSQLTokenRepository,
+                                           PostgreSQLUserRepository)
 
 # Security
 security = HTTPBearer()
@@ -29,16 +32,16 @@ _file_storage = LocalFileStorage()
 
 # Email configuration
 def get_email_config() -> ConnectionConfig:
-    """Get email configuration"""
+    """Get email configuration from settings"""
     return ConnectionConfig(
-        MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your-email@gmail.com"),
-        MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "your-app-password"),
-        MAIL_FROM=os.getenv("MAIL_FROM", "your-email@gmail.com"),
-        MAIL_PORT=int(os.getenv("MAIL_PORT", "587")),
-        MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-        MAIL_STARTTLS=True,
-        MAIL_SSL_TLS=False,
-        USE_CREDENTIALS=True,
+        MAIL_USERNAME=settings.MAIL_USERNAME,
+        MAIL_PASSWORD=settings.MAIL_PASSWORD,
+        MAIL_FROM=settings.MAIL_FROM,
+        MAIL_PORT=settings.MAIL_PORT,
+        MAIL_SERVER=settings.MAIL_SERVER,
+        MAIL_STARTTLS=settings.MAIL_STARTTLS,
+        MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
+        USE_CREDENTIALS=settings.USE_CREDENTIALS,
     )
 
 
@@ -92,6 +95,18 @@ def get_file_storage() -> LocalFileStorage:
 async def get_email_service() -> EmailService:
     """Get email service instance"""
     config = get_email_config()
+
+    # Check if email is properly configured
+    if (
+        config.MAIL_USERNAME == "your-email@gmail.com"
+        or config.MAIL_PASSWORD == "your-app-password"
+        or config.MAIL_FROM == "your-email@gmail.com"
+    ):
+        # Return a mock email service that does nothing
+        from ..core.services.email_service import MockEmailService
+
+        return MockEmailService()
+
     return EmailService(config)
 
 
@@ -107,8 +122,8 @@ async def get_auth_service(
         user_repository=user_repo,
         refresh_token_repository=refresh_token_repo,
         email_service=email_service,
-        secret_key=os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production"),
-        admin_email=os.getenv("ADMIN_EMAIL", "admin@example.com"),
+        secret_key=settings.SECRET_KEY,
+        admin_email=settings.ADMIN_EMAIL,
     )
 
 
@@ -140,6 +155,16 @@ async def get_poster_service(
         file_storage=file_storage,
         upload_dir="uploads",
     )
+
+
+# TODO: Implement AlbumService dependency when PostgreSQLAlbumRepository is created
+# async def get_album_service(
+#     image_repo: PostgreSQLImageRepository = Depends(get_image_repository),
+# ) -> AlbumService:
+#     """Get album service instance with PostgreSQL repositories"""
+#     from ..infrastructure.postgresql_repositories import PostgreSQLAlbumRepository
+#     album_repo = PostgreSQLAlbumRepository(Depends(get_db_session))
+#     return AlbumService(album_repo=album_repo, image_repo=image_repo)
 
 
 async def get_current_user(

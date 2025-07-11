@@ -3,25 +3,23 @@
 Admin User Management Script
 This script allows you to add admin users to the LinkLink Image Upload Server
 """
+from dotenv import load_dotenv
+
+load_dotenv()
 import asyncio
 import os
 import sys
 from datetime import datetime
 from getpass import getpass
 
-from dotenv import load_dotenv
-
-# Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from passlib.context import CryptContext
 from pydantic import validate_email
 
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.entities import User, UserStatus
 from app.infrastructure.database import AsyncSessionLocal
-from app.infrastructure.postgresql_repositories import PostgreSQLUserRepository
-
-load_dotenv()
+from app.infrastructure.repositories import PostgreSQLUserRepository
 
 
 class AdminUserCreator:
