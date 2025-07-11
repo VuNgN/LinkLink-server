@@ -10,6 +10,10 @@ jobs:
   backend:
     name: Backend (FastAPI)
     runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT_NAME: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    environment:
+      name: ${{ env.ENVIRONMENT_NAME }}
     defaults:
       run:
         working-directory: ./
@@ -21,8 +25,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.PGPASSWORD }}
           POSTGRES_DB: ${{ secrets.PGDATABASE }}
         ports: [5432:5432]
+        # Lưu ý: Không thể dùng secrets trong options, chỉ dùng được trong env
         options: >-
-          --health-cmd="pg_isready -U ${{ secrets.PGUSER }}" --health-interval=10s --health-timeout=5s --health-retries=5
+          --health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
       - uses: actions/checkout@v3
@@ -56,6 +61,10 @@ jobs:
   frontend:
     name: Frontend (Vite)
     runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT_NAME: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    environment:
+      name: ${{ env.ENVIRONMENT_NAME }}
     defaults:
       run:
         working-directory: ./frontend
