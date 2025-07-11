@@ -381,7 +381,8 @@ async def hard_delete_all_deleted_posters(
     summary="Get all archived (permanently deleted) posters metadata for current user",
     description="""
     Retrieve all archived posts metadata for the current user.
-    These are posts that have been permanently deleted (hard deleted) and only metadata is preserved.
+    These are posts that have been permanently deleted (hard deleted) and only metadata
+    is preserved.
     """,
     dependencies=[Security(get_current_user)],
 )
@@ -478,7 +479,8 @@ async def get_poster_detail(
     description="""
     Permanently delete a single post from the trash for the current user.
     This will archive the metadata for the deleted post and remove its image file.
-    Only the post owner can perform this action, and only if the post is already soft deleted.
+    Only the post owner can perform this action, and only if the post is already soft
+    deleted.
     """,
     response_model=ArchivedPoster,
     dependencies=[Security(get_current_user)],
@@ -518,9 +520,10 @@ async def hard_delete_single_deleted_poster(
     tags=["Posters", "Trash"],
     summary="Restore a deleted (trashed) poster",
     description="""
-    Restore a soft-deleted (trashed) poster for the current user. 
+    Restore a soft-deleted (trashed) poster for the current user.
     This sets is_deleted to False and removes deleted_at.
-    Only the post owner can perform this action, and only if the post is currently deleted.
+    Only the post owner can perform this action, and only if the post is currently
+    deleted.
     """,
     dependencies=[Security(get_current_user)],
 )

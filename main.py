@@ -10,13 +10,19 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-import app.bootstrap  # noqa
+from app import bootstrap  # noqa: F401
 from app.api.routes import router
 from app.config import settings
 from app.exceptions import setup_exception_handlers
 from app.infrastructure.database import close_db, init_db
 from app.infrastructure.notifier import post_notifier
 from app.utils.logging import get_logger, setup_logging
+
+import time
+
+# Log all requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 print("DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
 print("DEBUG: DATABASE_URL on setting =", settings.DATABASE_URL)
@@ -33,7 +39,8 @@ app = FastAPI(
     description="""
 # 🚀 Image Upload Server API
 
-A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and **Clean Architecture**.
+A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and
+**Clean Architecture**.
 
 ## ✨ Features
 
@@ -144,12 +151,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import time
-
-# Log all requests
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -162,7 +163,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             raise
         process_time = (time.time() - start_time) * 1000
         logger.info(
-            f"Response: {request.method} {request.url} - Status: {response.status_code} - {process_time:.2f}ms"
+            f"Response: {request.method} {request.url} - Status: {response.status_code}"
+            f"- {process_time:.2f}ms"
         )
         return response
 
@@ -277,7 +279,8 @@ async def shutdown_event():
 async def root():
     """
     # 🏠 API Root
-    Welcome to the Image Upload Server API! This endpoint provides basic information about the API.
+    Welcome to the Image Upload Server API! This endpoint provides basic information
+    about the API.
     """
     return {
         "message": "🖼️ Image Upload Server API (Clean Architecture + PostgreSQL)",

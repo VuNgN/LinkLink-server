@@ -16,16 +16,13 @@ from sqlalchemy import text, create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
-
-# Add app to path (phải đặt trước import từ app)
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-# Import models/entities (giữ import để SQLAlchemy nhận diện model)
 from app.core.entities.user import User, UserStatus  # noqa: F401
 from app.core.entities.image import Image  # noqa: F401
 from app.core.entities.poster import Poster  # noqa: F401
 from app.core.entities.album import Album  # noqa: F401
 from app.infrastructure.repositories import PostgreSQLUserRepository
 from app.infrastructure.database import Base
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def load_env_file(env_path):
@@ -139,4 +136,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

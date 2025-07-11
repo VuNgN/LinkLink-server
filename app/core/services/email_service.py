@@ -33,7 +33,8 @@ class EmailService:
                         <li><strong>Registration Date:</strong> {registration_time}</li>
                     </ul>
                     <p>Please review and approve/reject this registration.</p>
-                    <p>You can approve or reject this user through the admin interface.</p>
+                    <p>You can approve or reject this user through the admin interface.
+                    </p>
                 </body>
             </html>
             """,

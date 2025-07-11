@@ -43,13 +43,11 @@ async def login_legacy(
     summary="Login user and get access tokens",
     description="""
     Authenticate a user and return JWT access and refresh tokens.
-    
     ## Authentication Flow
     1. Send username and password
     2. Receive access and refresh tokens
     3. Use access token for API requests
     4. Refresh token when access token expires
-    
     ## Token Usage
     ```
     Authorization: Bearer <access_token>
@@ -121,11 +119,9 @@ async def refresh_token_legacy(
     summary="Refresh access token",
     description="""
     Get a new access token using a valid refresh token.
-    
     ## When to Use
     - Access token has expired
     - Need to continue API access without re-login
-    
     ## Token Expiration
     - **Access Token**: 30 minutes
     - **Refresh Token**: 7 days
@@ -202,7 +198,6 @@ async def logout_legacy(
     summary="Logout user and invalidate tokens",
     description="""
     Logout the current user and invalidate their refresh token.
-    
     ## Security
     - Invalidates the refresh token on the server
     - Client should also clear stored tokens

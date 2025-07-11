@@ -2,7 +2,6 @@
 Dependency injection setup with PostgreSQL support
 """
 
-import os
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status

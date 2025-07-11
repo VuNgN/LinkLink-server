@@ -22,18 +22,15 @@ router = APIRouter()
     summary="Upload an image file",
     description="""
     Upload an image file to the server.
-    
     ## File Requirements
     - **Supported formats**: JPEG, PNG, GIF, WebP
     - **Maximum size**: 10MB
     - **Authentication**: Required (Bearer token)
-    
     ## File Processing
     - File is validated for type and size
     - Unique filename is generated
     - File is stored securely
     - Metadata is saved to database
-    
     ## Security
     - Only authenticated users can upload
     - Files are isolated per user
@@ -115,7 +112,6 @@ async def upload_image(
     summary="Get all images for current user",
     description="""
     Retrieve all images uploaded by the authenticated user.
-    
     ## Response
     Returns a list of image information including:
     - Filename (unique identifier)
@@ -123,7 +119,6 @@ async def upload_image(
     - File size in bytes
     - Content type (MIME type)
     - Upload date
-    
     ## Access Control
     - Only returns images owned by the authenticated user
     - No access to other users' images
@@ -183,14 +178,11 @@ async def get_images(
     summary="Get specific image information",
     description="""
     Retrieve detailed information about a specific image.
-    
     ## Parameters
     - `filename`: The unique filename of the image
-    
     ## Access Control
     - Only the image owner can access image information
     - Returns 404 if image doesn't exist or user doesn't own it
-    
     ## Usage
     Use this endpoint to get metadata before displaying or downloading an image.
     """,
@@ -251,14 +243,11 @@ async def get_image(
     summary="Delete an image",
     description="""
     Delete a specific image from the server.
-    
     ## Parameters
     - `filename`: The unique filename of the image to delete
-    
     ## Access Control
     - Only the image owner can delete the image
     - Returns 404 if image doesn't exist or user doesn't own it
-    
     ## Effects
     - Removes the image file from storage
     - Deletes the image record from database
