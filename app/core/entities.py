@@ -33,7 +33,7 @@ class User(BaseModel):
         ..., description="Unique email address for the user account"
     )
     hashed_password: str = Field(
-        ..., description="Securely hashed password (never stored in plain text)"
+        ..., description=("Securely hashed password (never stored in plain text)")
     )
     is_active: bool = Field(
         default=True, description="Whether the user account is active"
@@ -66,7 +66,9 @@ class User(BaseModel):
             "example": {
                 "username": "john_doe",
                 "email": "john.doe@example.com",
-                "hashed_password": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iQeO",
+                "hashed_password": (
+                    "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iQeO"
+                ),
                 "is_active": True,
                 "is_admin": False,
                 "status": "approved",
@@ -135,8 +137,8 @@ class Token(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huX2RvZSIsImV4cCI6MTcwNTM5NzAwMH0.example_signature",
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huX2RvZSIsImV4cCI6MTcxMjE3NzAwMH0.refresh_signature",
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
                 "expires_at": "2024-01-15T11:00:00Z",
             }
@@ -216,9 +218,7 @@ class RefreshTokenRequest(BaseModel):
 
     class Config:
         schema_extra = {
-            "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huX2RvZSIsImV4cCI6MTcxMjE3NzAwMH0.refresh_signature"
-            }
+            "example": {"refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
         }
 
 
@@ -231,9 +231,7 @@ class LogoutRequest(BaseModel):
 
     class Config:
         schema_extra = {
-            "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huX2RvZSIsImV4cCI6MTcxMjE3NzAwMH0.refresh_signature"
-            }
+            "example": {"refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
         }
 
 
@@ -265,7 +263,10 @@ class UserRegistrationResponse(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "message": "Registration submitted successfully. Your account will be reviewed by an administrator.",
+                "message": (
+                    "Registration submitted successfully. "
+                    "Your account will be reviewed by an administrator."
+                ),
                 "status": "pending",
                 "email": "john.doe@example.com",
             }
@@ -318,11 +319,11 @@ class Poster(BaseModel):
     id: int
     username: str
     message: str
-    image_path: str
     created_at: datetime
-    privacy: str  # 'public' hoặc 'private'
+    privacy: str  # 'public', 'community', or 'private'
     is_deleted: bool = False
     deleted_at: Optional[datetime] = None
+    images: Optional[list] = None  # List of linked images
 
     class Config:
         from_attributes = True
@@ -331,11 +332,11 @@ class Poster(BaseModel):
                 "id": 1,
                 "username": "john_doe",
                 "message": "Check out my new poster!",
-                "image_path": "/uploads/poster1.jpg",
                 "created_at": "2024-06-29T10:30:00Z",
                 "privacy": "public",
                 "is_deleted": False,
                 "deleted_at": None,
+                "images": [],
             }
         }
 
@@ -368,5 +369,58 @@ class ArchivedPoster(BaseModel):
                 "deleted_at": "2024-07-01T15:45:00Z",
                 "archived_at": "2024-07-15T09:20:00Z",
                 "privacy": "public",
+            }
+        }
+
+
+class AlbumPrivacy(str, Enum):
+    WRITABLE = "writable"
+    READ_ONLY = "read-only"
+
+
+class Album(BaseModel):
+    """Album domain entity"""
+
+    id: int
+    name: str
+    username: str
+    created_at: datetime
+    privacy: AlbumPrivacy = Field(
+        default=AlbumPrivacy.READ_ONLY,
+        description="Album privacy: writable or read-only",
+    )
+
+    class Config:
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                "id": 1,
+                "name": "My Summer Trip",
+                "username": "john_doe",
+                "created_at": "2024-07-01T10:00:00Z",
+                "privacy": "writable",
+            }
+        }
+
+
+class AlbumImage(BaseModel):
+    """Album-Image link entity"""
+
+    album_id: int
+    image_id: str  # image filename
+    added_by: str = Field(..., description="Username of the user who added the image")
+    added_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when the image was added to the album",
+    )
+
+    class Config:
+        orm_mode = True
+        schema_extra = {
+            "example": {
+                "album_id": 1,
+                "image_id": "abc123_vacation.jpg",
+                "added_by": "john_doe",
+                "added_at": "2024-07-01T10:05:00Z",
             }
         }

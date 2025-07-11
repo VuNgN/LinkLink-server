@@ -2,23 +2,20 @@
 Business logic services - Core use cases
 """
 
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import bcrypt
-from fastapi import HTTPException, status
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from pydantic import EmailStr
+from jose import jwt
 
 from .entities import (AdminApprovalRequest, Image, ImageInfo, PendingUserInfo,
-                       RefreshTokenRequest, Token, User, UserCreate, UserLogin,
-                       UserRegistrationResponse, UserStatus)
-from .interfaces import (ArchivedPosterRepository, FileStorage,
-                         ImageRepository, PosterRepository,
-                         RefreshTokenRepository, TokenRepository,
-                         UserRepository)
+                       User, UserCreate, UserLogin, UserRegistrationResponse,
+                       UserStatus)
+from .interfaces import (AlbumRepository, ArchivedPosterRepository,
+                         FileStorage, ImageRepository, PosterRepository,
+                         RefreshTokenRepository, UserRepository)
 
 
 class EmailService:
@@ -42,7 +39,11 @@ class EmailService:
                     <ul>
                         <li><strong>Username:</strong> {username}</li>
                         <li><strong>Email:</strong> {user_email}</li>
-                        <li><strong>Registration Date:</strong> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                        <li><strong>Registration Date:</strong>
+                            {datetime.now(timezone.utc).strftime(
+                                '%Y-%m-%d %H:%M:%S UTC'
+                            )}
+                        </li>
                     </ul>
                     <p>Please review and approve/reject this registration.</p>
                     <p>You can approve or reject this user through the admin interface.</p>
@@ -148,7 +149,10 @@ class AuthService:
         )
 
         return UserRegistrationResponse(
-            message="Registration submitted successfully. Your account will be reviewed by an administrator.",
+            message=(
+                "Registration submitted successfully. "
+                "Your account will be reviewed by an administrator."
+            ),
             status="pending",
             email=user_data.email,
         )
@@ -333,7 +337,7 @@ class ImageService:
         file_storage: FileStorage,
         upload_dir: str = "uploads",
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
-        allowed_types: List[str] = None,
+        allowed_types: Optional[List[str]] = None,
     ):
         self.image_repo = image_repo
         self.file_storage = file_storage
@@ -384,8 +388,24 @@ class ImageService:
         # Generate unique filename
         filename = self._generate_filename(username, original_filename)
 
+        # Tạo đường dẫn thư mục theo ngày + user
+        now = datetime.now(timezone.utc)
+        subdir = os.path.join(
+            self.upload_dir,
+            str(now.year),
+            f"{now.month:02d}",
+            f"{now.day:02d}",
+            username,
+        )
+        os.makedirs(subdir, exist_ok=True)
+        file_path = os.path.join(subdir, filename)
+
         # Save file
-        file_path = await self.file_storage.save_file(file_content, filename)
+        async def _save():
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+
+        await _save()
 
         # Create image record
         image = Image(
@@ -402,14 +422,28 @@ class ImageService:
     async def get_user_images(self, username: str) -> List[ImageInfo]:
         """Get all images for a user"""
         images = await self.image_repo.get_by_username(username)
+
+        def to_public_path(fp):
+            # Always return a public path starting with /uploads/
+            if not fp:
+                return ""
+            fp = fp.replace("\\", "/")  # Windows compatibility
+            if fp.startswith("/uploads/"):
+                return fp
+            if fp.startswith("uploads/"):
+                return "/" + fp
+            # fallback: just return filename under uploads
+            return "/uploads/" + os.path.basename(fp)
+
         return [
-            ImageInfo(
-                filename=img.filename,
-                original_filename=img.original_filename,
-                upload_date=img.upload_date,
-                file_size=img.file_size,
-                content_type=img.content_type,
-            )
+            {
+                "filename": img.filename,
+                "original_filename": img.original_filename,
+                "upload_date": img.upload_date,
+                "file_size": img.file_size,
+                "content_type": img.content_type,
+                "file_path": to_public_path(img.file_path),
+            }
             for img in sorted(images, key=lambda x: x.upload_date, reverse=True)
         ]
 
@@ -452,10 +486,10 @@ class PosterService:
         self,
         poster_id: int,
         username: str,
-        message: str = None,
-        image_content: bytes = None,
-        image_filename: str = None,
-        privacy: str = None,
+        message: Optional[str] = None,
+        image_content: Optional[bytes] = None,
+        image_filename: Optional[str] = None,
+        privacy: Optional[str] = None,
     ):
         poster = await self.poster_repo.get_by_id(poster_id)
         if not poster:
@@ -464,22 +498,21 @@ class PosterService:
             raise ValueError("Not allowed to edit this poster")
         if poster.is_deleted:
             raise ValueError("Cannot edit a deleted poster")
+
         # Update message
         if message is not None:
             poster.message = message
+
         # Update privacy
         if privacy is not None:
             poster.privacy = privacy
+
         # Update image if provided
         if image_content is not None and image_filename is not None:
-            # Remove old image file
-            if poster.image_path:
-                await self.file_storage.delete_file(poster.image_path)
-            # Save new image
-            new_image_path = await self.file_storage.save_file(
-                image_content, f"{username}_{image_filename}"
-            )
-            poster.image_path = new_image_path
+            # Note: Image handling is now done in the route layer
+            # since images are stored separately in the database
+            pass
+
         await self.poster_repo.update(poster)
         return poster
 
@@ -505,9 +538,10 @@ class PosterService:
             raise ValueError("Not allowed to hard delete this poster")
         if not poster.is_deleted:
             raise ValueError("Poster must be deleted first (in trash)")
-        # Remove image file
-        if poster.image_path:
-            await self.file_storage.delete_file(poster.image_path)
+
+        # Note: Image file deletion is now handled in the route layer
+        # since images are stored separately and linked via poster_id
+
         # Archive and hard delete, and return the archived poster
         archived = await self.poster_repo.archive_and_hard_delete(
             poster_id, self.archived_repo
@@ -517,10 +551,9 @@ class PosterService:
         return archived
 
     async def hard_delete_all_deleted(self, username: str):
-        deleted_posts = await self.poster_repo.get_deleted(username)
-        for poster in deleted_posts:
-            if poster.image_path:
-                await self.file_storage.delete_file(poster.image_path)
+        # Note: Image file deletion is now handled in the route layer
+        # since images are stored separately and linked via poster_id
+
         count = await self.poster_repo.archive_and_hard_delete_all_deleted(
             username, self.archived_repo
         )
@@ -542,3 +575,67 @@ class PosterService:
             raise ValueError("Failed to restore poster")
         # Return the restored poster
         return await self.poster_repo.get_by_id(poster_id)
+
+
+class AlbumService:
+    """Album management business logic"""
+
+    def __init__(self, album_repo: AlbumRepository, image_repo: ImageRepository):
+        self.album_repo = album_repo
+        self.image_repo = image_repo
+
+    async def create_album(
+        self, name: str, username: str, privacy: str = "read-only"
+    ) -> int:
+        album = {
+            "name": name,
+            "username": username,
+            "created_at": datetime.now(timezone.utc),
+            "privacy": privacy,
+        }
+        return await self.album_repo.create(album)
+
+    async def get_albums(self, username: Optional[str] = None):
+        # If username is provided, get user's albums, else get all albums
+        if username:
+            return await self.album_repo.get_by_username(username)
+        return await self.album_repo.get_all()
+
+    async def add_image_to_album(
+        self, album_id: int, image_id: str, username: str
+    ) -> bool:
+        # Enforce privacy: only creator can add if read-only, anyone if writable
+        can_edit = await self.album_repo.can_edit_album(album_id, username)
+        if not can_edit:
+            raise ValueError("You do not have permission to add images to this album")
+        image = await self.image_repo.get_by_filename(image_id)
+        if not image:
+            raise ValueError("Image not found")
+        return await self.album_repo.add_image(album_id, image_id, username)
+
+    async def remove_image_from_album(
+        self, album_id: int, image_id: str, username: str
+    ) -> bool:
+        # Enforce privacy: only creator can remove if read-only, anyone if writable
+        can_edit = await self.album_repo.can_edit_album(album_id, username)
+        if not can_edit:
+            raise ValueError(
+                "You do not have permission to remove images from this album"
+            )
+        return await self.album_repo.remove_image(album_id, image_id, username)
+
+    async def get_album_images(self, album_id: int):
+        image_ids = await self.album_repo.get_images(album_id)
+        images = []
+        for image_id in image_ids:
+            img = await self.image_repo.get_by_filename(image_id)
+            if img:
+                images.append(img)
+        return images
+
+    async def delete_album(self, album_id: int, username: str) -> bool:
+        # Only creator can delete
+        is_creator = await self.album_repo.is_album_creator(album_id, username)
+        if not is_creator:
+            raise ValueError("You do not have permission to delete this album")
+        return await self.album_repo.delete(album_id, username)

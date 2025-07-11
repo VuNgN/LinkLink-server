@@ -124,7 +124,7 @@ export default function Trash() {
               key={post.id}
               style={{ marginBottom: 16, position: "relative" }}
             >
-              <PostItem post={post} />
+              <PostItem post={post} showActions={false} />
               <button
                 onClick={() => {
                   setDeleteId(post.id);

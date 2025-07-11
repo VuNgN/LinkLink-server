@@ -6,7 +6,6 @@ This script demonstrates how to use all the API endpoints
 
 import json
 import os
-from pathlib import Path
 
 import requests
 
@@ -66,7 +65,7 @@ def test_image_upload(tokens):
         print(f"Creating test image: {test_image_path}")
         # Create a simple test image using PIL
         try:
-            from PIL import Image, ImageDraw, ImageFont
+            from PIL import Image, ImageDraw
 
             img = Image.new("RGB", (200, 200), color="red")
             draw = ImageDraw.Draw(img)

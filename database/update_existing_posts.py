@@ -5,7 +5,6 @@ Script to update existing posts to set is_deleted to false and deleted_at to nul
 import asyncio
 import os
 import sys
-from datetime import datetime
 
 # Add the app directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -35,9 +34,9 @@ async def update_existing_posts():
             result = await session.execute(stmt)
             await session.commit()
 
-            print(f"✅ Successfully updated {result.rowcount} posts")
-            print(f"   - Set is_deleted to False")
-            print(f"   - Set deleted_at to None")
+            print("✅ Successfully updated {} posts".format(result.rowcount))
+            print("   - Set is_deleted to False")
+            print("   - Set deleted_at to None")
 
         except Exception as e:
             print(f"❌ Error updating posts: {e}")

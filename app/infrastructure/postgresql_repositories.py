@@ -7,7 +7,6 @@ from typing import List, Optional
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from ..core.entities import ArchivedPoster, Image, Poster, User, UserStatus
 from ..core.interfaces import (ArchivedPosterRepository, ImageRepository,
@@ -380,7 +379,6 @@ class PostgreSQLPosterRepository(PosterRepository):
         db_poster = PosterModel(
             username=poster.username,
             message=poster.message,
-            image_path=poster.image_path,
             privacy=poster.privacy,
             is_deleted=poster.is_deleted,
             deleted_at=poster.deleted_at,
@@ -399,7 +397,7 @@ class PostgreSQLPosterRepository(PosterRepository):
     async def get_by_username(self, username: str) -> list:
         result = await self.session.execute(
             select(PosterModel).where(
-                PosterModel.username == username, PosterModel.is_deleted == False
+                PosterModel.username == username, PosterModel.is_deleted.is_(False)
             )
         )
         posters = result.scalars().all()
@@ -410,7 +408,6 @@ class PostgreSQLPosterRepository(PosterRepository):
         if not db_poster:
             raise ValueError("Poster not found")
         db_poster.message = poster.message
-        db_poster.image_path = poster.image_path
         db_poster.privacy = poster.privacy
         db_poster.is_deleted = poster.is_deleted
         db_poster.deleted_at = poster.deleted_at
@@ -433,7 +430,7 @@ class PostgreSQLPosterRepository(PosterRepository):
     async def get_deleted(self, username: str) -> list:
         result = await self.session.execute(
             select(PosterModel).where(
-                PosterModel.username == username, PosterModel.is_deleted == True
+                PosterModel.username == username, PosterModel.is_deleted.is_(True)
             )
         )
         posters = result.scalars().all()
@@ -450,7 +447,7 @@ class PostgreSQLPosterRepository(PosterRepository):
     async def hard_delete_all_deleted(self, username: str) -> int:
         result = await self.session.execute(
             select(PosterModel).where(
-                PosterModel.username == username, PosterModel.is_deleted == True
+                PosterModel.username == username, PosterModel.is_deleted.is_(True)
             )
         )
         posters = result.scalars().all()
@@ -470,15 +467,25 @@ class PostgreSQLPosterRepository(PosterRepository):
             return None
 
         # Create archived record
-        import os
         from datetime import datetime, timezone
+
+        # Get the first image associated with this poster for archival
+        from .models import ImageModel
+
+        image_result = await self.session.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster_id).limit(1)
+        )
+        first_image = image_result.scalar_one_or_none()
+
+        original_image_path = first_image.file_path if first_image else ""
+        image_filename = first_image.filename if first_image else ""
 
         archived_poster = ArchivedPoster(
             original_id=db_poster.id,
             username=db_poster.username,
             message=db_poster.message,
-            original_image_path=db_poster.image_path,
-            image_filename=os.path.basename(db_poster.image_path),
+            original_image_path=original_image_path,
+            image_filename=image_filename,
             created_at=db_poster.created_at,
             deleted_at=db_poster.deleted_at,
             archived_at=datetime.now(timezone.utc),
@@ -497,22 +504,32 @@ class PostgreSQLPosterRepository(PosterRepository):
         """Archive all deleted posters metadata then hard delete"""
         result = await self.session.execute(
             select(PosterModel).where(
-                PosterModel.username == username, PosterModel.is_deleted == True
+                PosterModel.username == username, PosterModel.is_deleted.is_(True)
             )
         )
         posters = result.scalars().all()
         count = 0
-        import os
         from datetime import datetime, timezone
 
+        from .models import ImageModel
+
         for p in posters:
+            # Get the first image associated with this poster for archival
+            image_result = await self.session.execute(
+                select(ImageModel).where(ImageModel.poster_id == p.id).limit(1)
+            )
+            first_image = image_result.scalar_one_or_none()
+
+            original_image_path = first_image.file_path if first_image else ""
+            image_filename = first_image.filename if first_image else ""
+
             # Create archived record
             archived_poster = ArchivedPoster(
                 original_id=p.id,
                 username=p.username,
                 message=p.message,
-                original_image_path=p.image_path,
-                image_filename=os.path.basename(p.image_path),
+                original_image_path=original_image_path,
+                image_filename=image_filename,
                 created_at=p.created_at,
                 deleted_at=p.deleted_at,
                 archived_at=datetime.now(timezone.utc),

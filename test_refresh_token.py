@@ -3,8 +3,6 @@
 Test script to verify refresh token functionality
 """
 
-import json
-import time
 
 import requests
 

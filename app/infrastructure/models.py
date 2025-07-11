@@ -2,8 +2,6 @@
 SQLAlchemy database models
 """
 
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, Text
 from sqlalchemy.sql import func
 
@@ -23,7 +21,9 @@ class UserModel(Base):
     status = Column(String(20), default="pending")  # pending, approved, rejected
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
     approved_at = Column(DateTime(timezone=True), nullable=True)
     approved_by = Column(String(50), nullable=True)
@@ -41,6 +41,7 @@ class ImageModel(Base):
     file_size = Column(Integer, nullable=False)
     content_type = Column(String(100), nullable=False)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
+    poster_id = Column(Integer, nullable=True, index=True)  # Liên kết với posters.id
 
 
 class RefreshTokenModel(Base):
@@ -62,10 +63,10 @@ class PosterModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), nullable=False, index=True)
     message = Column(Text, nullable=False)
-    image_path = Column(String(500), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     privacy = Column(
-        Enum("public", "community", "private", name="privacyenum"), default="private"
+        Enum("public", "community", "private", name="privacyenum"),
+        default="private",
     )
     is_deleted = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -90,3 +91,30 @@ class ArchivedPosterModel(Base):
         DateTime(timezone=True), server_default=func.now()
     )  # When hard deleted
     privacy = Column(String(20), nullable=False)  # Original privacy setting
+
+
+class AlbumModel(Base):
+    """Album database model"""
+
+    __tablename__ = "albums"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    username = Column(String(50), nullable=False, index=True)  # creator
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    privacy = Column(
+        Enum("writable", "read-only", name="albumprivacyenum"),
+        default="read-only",
+        nullable=False,
+    )
+
+
+class AlbumImageModel(Base):
+    """Album-Image link model"""
+
+    __tablename__ = "album_images"
+
+    album_id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(String(255), primary_key=True, index=True)  # filename
+    added_by = Column(String(50), nullable=False)
+    added_at = Column(DateTime(timezone=True), server_default=func.now())

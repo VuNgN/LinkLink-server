@@ -243,6 +243,19 @@ clean_all() {
     fi
 }
 
+# Migrate album DB
+migrate_album_db() {
+    print_status "Running album DB migration (album_migration.sql)..."
+    if [ ! -f database/album_migration.sql ]; then
+        print_error "Migration file database/album_migration.sql not found!"
+        exit 1
+    fi
+    docker-compose cp database/album_migration.sql postgres:/album_migration.sql
+    docker-compose exec -T postgres psql -U postgres -d image_upload_db -f /album_migration.sql
+    docker-compose exec -T postgres rm /album_migration.sql
+    print_success "Album DB migration completed."
+}
+
 # Main execution
 main() {
     case "${1:-help}" in
@@ -278,6 +291,9 @@ main() {
             ;;
         clean)
             clean_all
+            ;;
+        migrate-album)
+            migrate_album_db
             ;;
         help|--help|-h)
             show_usage

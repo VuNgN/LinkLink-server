@@ -61,9 +61,9 @@ class AdminUserCreator:
                 )
 
                 await user_repo.create(admin_user)
-                print(f"✅ Admin user '{username}' created successfully!")
-                print(f"📧 Email: {email}")
-                print(f"🔐 Status: Approved and Active")
+                print("✅ Admin user '{}' created successfully!".format(username))
+                print("📧 Email: {}".format(email))
+                print("🔐 Status: Approved and Active")
                 return True
 
         except Exception as e:
