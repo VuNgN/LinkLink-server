@@ -116,6 +116,10 @@ class Settings(BaseModel):
         default=os.getenv("DEBUG", "false").lower() == "true", description="Debug mode"
     )
 
+    # Port
+    PORT: int = Field(default=int(os.getenv("PORT", "8000")), description="Port")
+    HOST: str = Field(default=os.getenv("HOST", "0.0.0.0"), description="Host")
+
 
 # Create global settings instance
 settings = Settings()

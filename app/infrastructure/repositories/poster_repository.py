@@ -3,9 +3,8 @@ PostgreSQL Poster Repository implementations
 """
 
 from datetime import datetime, timezone
-from typing import Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.entities import ArchivedPoster, Poster

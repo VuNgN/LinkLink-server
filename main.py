@@ -3,14 +3,18 @@ Main application entry point using Clean Architecture with PostgreSQL
 """
 
 import os
+import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+# Log all requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
-import app.bootstrap  # noqa
+from app import bootstrap  # noqa: F401
 from app.api.routes import router
 from app.config import settings
 from app.exceptions import setup_exception_handlers
@@ -33,7 +37,8 @@ app = FastAPI(
     description="""
 # 🚀 Image Upload Server API
 
-A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and **Clean Architecture**.
+A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and
+**Clean Architecture**.
 
 ## ✨ Features
 
@@ -144,12 +149,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import time
-
-# Log all requests
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -162,7 +161,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             raise
         process_time = (time.time() - start_time) * 1000
         logger.info(
-            f"Response: {request.method} {request.url} - Status: {response.status_code} - {process_time:.2f}ms"
+            f"Response: {request.method} {request.url} - Status: {response.status_code}"
+            f"- {process_time:.2f}ms"
         )
         return response
 
@@ -277,7 +277,8 @@ async def shutdown_event():
 async def root():
     """
     # 🏠 API Root
-    Welcome to the Image Upload Server API! This endpoint provides basic information about the API.
+    Welcome to the Image Upload Server API! This endpoint provides basic information
+    about the API.
     """
     return {
         "message": "🖼️ Image Upload Server API (Clean Architecture + PostgreSQL)",
@@ -350,4 +351,4 @@ async def websocket_post_notify(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

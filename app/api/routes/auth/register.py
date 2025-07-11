@@ -32,21 +32,17 @@ async def register_legacy(
     description="""
     Register a new user account with username, email, and password.
     The account will be pending admin approval before activation.
-    
     ## Requirements
     - **Username**: 3-50 characters, unique
     - **Email**: Valid email address, unique
     - **Password**: 6-100 characters
-    
     ## Process
     1. User submits registration
     2. Admin receives email notification
     3. Admin approves/rejects the account
     4. User receives approval/rejection notification
-    
     ## Response
     Returns a success message indicating the account is pending approval.
-    
     ## Errors
     - `400 Bad Request`: Invalid input data, username exists, or email exists
     """,
@@ -56,7 +52,8 @@ async def register_legacy(
             "content": {
                 "application/json": {
                     "example": {
-                        "message": "Registration submitted successfully. Your account will be reviewed by an administrator.",
+                        "message": """Registration submitted successfully.
+                        Your account will be reviewed by an administrator.""",
                         "status": "pending",
                         "email": "john.doe@example.com",
                     }

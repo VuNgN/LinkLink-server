@@ -20,11 +20,9 @@ router = APIRouter()
     description="""
     Approve or reject a pending user registration.
     Only accessible by admin users.
-    
     ## Actions
     - **approve**: Activate the user account
     - **reject**: Reject the user registration
-    
     ## Notifications
     - User receives email notification of approval/rejection
     - Admin can provide optional reason for rejection
@@ -71,7 +69,6 @@ async def approve_user(
     description="""
     Get a list of all users with pending registration status.
     Only accessible by admin users.
-    
     ## Response
     Returns a list of pending users with their registration details.
     """,

@@ -5,7 +5,7 @@ Poster domain entities
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Poster(BaseModel):
