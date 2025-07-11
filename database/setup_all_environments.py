@@ -6,22 +6,25 @@ Setup all environments (production & development) for LinkLink Image Upload Serv
 - Ignore nếu database đã tồn tại để tránh override
 - Idempotent: chạy lại không bị lỗi, không override dữ liệu cũ
 """
+import asyncio
 import os
 import sys
-import asyncio
 from datetime import datetime
+from pathlib import Path
+
 from dotenv import load_dotenv
 from passlib.context import CryptContext
-from sqlalchemy import text, create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from pathlib import Path
-from app.core.entities.user import User, UserStatus  # noqa: F401
+
+from app.core.entities.album import Album  # noqa: F401
 from app.core.entities.image import Image  # noqa: F401
 from app.core.entities.poster import Poster  # noqa: F401
-from app.core.entities.album import Album  # noqa: F401
-from app.infrastructure.repositories import PostgreSQLUserRepository
+from app.core.entities.user import User, UserStatus  # noqa: F401
 from app.infrastructure.database import Base
+from app.infrastructure.repositories import PostgreSQLUserRepository
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -58,18 +61,26 @@ async def create_tables_and_migrations(async_engine):
 
         # Migration bổ sung (nếu có)
         # 1. Enum cho albums (privacy)
-        await conn.execute(text("""
+        await conn.execute(
+            text(
+                """
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'albumprivacyenum') THEN
                 CREATE TYPE albumprivacyenum AS ENUM ('writable', 'read-only');
             END IF;
         END$$;
-        """))
-        await conn.execute(text("""
+        """
+            )
+        )
+        await conn.execute(
+            text(
+                """
         ALTER TABLE IF EXISTS albums
         ADD COLUMN IF NOT EXISTS privacy albumprivacyenum NOT NULL DEFAULT 'read-only';
-        """))
+        """
+            )
+        )
         print("✅ Ensured privacy column on albums table")
 
         # 2. Các migration bổ sung khác nếu cần (ví dụ: soft delete, FK, ...)
@@ -78,7 +89,9 @@ async def create_tables_and_migrations(async_engine):
 
 async def create_admin_user(async_engine):
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    async_session = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = sessionmaker(
+        async_engine, class_=AsyncSession, expire_on_commit=False
+    )
     async with async_session() as session:
         user_repo = PostgreSQLUserRepository(session)
         admin_username, admin_email, admin_password = get_admin_info()
@@ -112,8 +125,12 @@ async def setup_env(env_name, env_path):
     sync_db_url_root = to_sync_url(db_url_root)
     try:
         # Sử dụng AUTOCOMMIT để tạo database ngoài transaction block
-        with create_engine(sync_db_url_root).connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname='{db_name}'"))
+        with create_engine(sync_db_url_root).connect().execution_options(
+            isolation_level="AUTOCOMMIT"
+        ) as conn:
+            result = conn.execute(
+                text(f"SELECT 1 FROM pg_database WHERE datname='{db_name}'")
+            )
             if not result.fetchone():
                 conn.execute(text(f"CREATE DATABASE {db_name}"))
                 print(f"✅ Created database: {db_name}")

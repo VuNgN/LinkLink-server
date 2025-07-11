@@ -3,12 +3,16 @@ Main application entry point using Clean Architecture with PostgreSQL
 """
 
 import os
+import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+# Log all requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from app import bootstrap  # noqa: F401
 from app.api.routes import router
@@ -17,12 +21,6 @@ from app.exceptions import setup_exception_handlers
 from app.infrastructure.database import close_db, init_db
 from app.infrastructure.notifier import post_notifier
 from app.utils.logging import get_logger, setup_logging
-
-import time
-
-# Log all requests
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
 print("DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
 print("DEBUG: DATABASE_URL on setting =", settings.DATABASE_URL)

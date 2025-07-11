@@ -12,4 +12,5 @@ asyncpg==0.29.0
 alembic==1.12.1
 psycopg2-binary==2.9.9
 email-validator==2.1.0
-fastapi-mail==1.4.1 
+fastapi-mail==1.4.1
+aiohttp

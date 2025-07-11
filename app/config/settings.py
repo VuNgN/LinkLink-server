@@ -117,12 +117,8 @@ class Settings(BaseModel):
     )
 
     # Port
-    PORT: int = Field(
-        default=int(os.getenv("PORT", "8000")), description="Port"
-    )
-    HOST: str = Field(
-        default=os.getenv("HOST", "0.0.0.0"), description="Host"
-    )
+    PORT: int = Field(default=int(os.getenv("PORT", "8000")), description="Port")
+    HOST: str = Field(default=os.getenv("HOST", "0.0.0.0"), description="Host")
 
 
 # Create global settings instance

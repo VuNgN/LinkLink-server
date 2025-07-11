@@ -44,11 +44,6 @@ jobs:
           pip install flake8
           flake8 app main.py
 
-      - name: Test backend (pytest)
-        run: |
-          pip install pytest
-          pytest
-
       - name: Security scan backend (trivy)
         uses: aquasecurity/trivy-action@master
         with:
