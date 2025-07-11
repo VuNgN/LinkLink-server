@@ -2,7 +2,6 @@
 Main application entry point using Clean Architecture with PostgreSQL
 """
 
-import logging
 import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -11,20 +10,25 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+import app.bootstrap  # noqa
 from app.api.routes import router
+from app.config import settings
+from app.exceptions import setup_exception_handlers
 from app.infrastructure.database import close_db, init_db
 from app.infrastructure.notifier import post_notifier
+from app.utils.logging import get_logger, setup_logging
 
+print("DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
+print("DEBUG: DATABASE_URL on setting =", settings.DATABASE_URL)
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "INFO"), log_file=os.getenv("LOG_FILE", "logs/app.log")
 )
-logger = logging.getLogger("image-upload-server")
+logger = get_logger(__name__)
 
 # Create FastAPI app with enhanced metadata
 app = FastAPI(
-    title="🖼️ Image Upload Server API",
+    title=settings.PROJECT_NAME,
     version="2.1.0",
     description="""
 # 🚀 Image Upload Server API
@@ -128,10 +132,13 @@ open http://localhost:8000/docs
     ],
 )
 
+# Setup exception handlers
+setup_exception_handlers(app)
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -163,13 +170,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 app.add_middleware(LoggingMiddleware)
 
 # Include API routes
-app.include_router(router, prefix="/api/v1")
+app.include_router(router, prefix=settings.API_V1_STR)
 
 # Serve the admin directory at /admin
 app.mount("/admin", StaticFiles(directory="admin"), name="admin")
 
 # Serve uploaded images at /uploads
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")

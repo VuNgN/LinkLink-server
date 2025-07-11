@@ -3,19 +3,16 @@ Database configuration and session management
 """
 
 import os
+from typing import AsyncGenerator
 
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
 from sqlalchemy.orm import DeclarativeBase
 
-load_dotenv()
+from ..config import settings
 
-# Database configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:password@localhost:5432/image_upload_db",
-)
+# Database configuration - use settings
+DATABASE_URL = settings.DATABASE_URL
 
 # Create async engine
 engine = create_async_engine(
@@ -36,7 +33,7 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db_session() -> AsyncSession:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session"""
     async with AsyncSessionLocal() as session:
         try:
