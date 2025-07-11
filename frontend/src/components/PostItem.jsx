@@ -1,10 +1,15 @@
 import React, { memo } from "react";
 
-const PostItem = memo(function PostItem({ post, onClick }) {
-  let imageUrl = post.image_path;
-  if (imageUrl && !imageUrl.startsWith("/uploads/")) {
-    const idx = imageUrl.lastIndexOf("/uploads/");
-    if (idx !== -1) imageUrl = imageUrl.slice(idx);
+const PostItem = memo(function PostItem({ post, onClick, showActions = true }) {
+  let imageUrl = "";
+  if (
+    Array.isArray(post.images) &&
+    post.images.length > 0 &&
+    post.images[0].file_path
+  ) {
+    imageUrl = post.images[0].file_path;
+  } else if (post.file_path || post.image_path) {
+    imageUrl = post.file_path || post.image_path;
   }
   let createdAt = "";
   if (post.created_at) {
@@ -83,34 +88,36 @@ const PostItem = memo(function PostItem({ post, onClick }) {
               ? "👥 Cộng đồng"
               : "🔒 Riêng tư"}
         </span>
-        <button
-          type="button"
-          style={{
-            marginLeft: "auto",
-            background: "#e3f2fd",
-            color: "#1565c0",
-            border: "none",
-            borderRadius: 20,
-            padding: "10px 28px",
-            fontWeight: 700,
-            cursor: "pointer",
-            fontSize: 18,
-            boxShadow: "0 2px 8px #2196f322",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            transition: "background 0.2s",
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            const url = window.location.origin + "/post/" + post.id;
-            navigator.clipboard.writeText(url);
-            window.alert("Đã copy link bài viết!");
-          }}
-        >
-          <span style={{ fontSize: 22, marginRight: 6 }}>📤</span>{" "}
-          <span>Chia sẻ</span>
-        </button>
+        {showActions && (
+          <button
+            type="button"
+            style={{
+              marginLeft: "auto",
+              background: "#e3f2fd",
+              color: "#1565c0",
+              border: "none",
+              borderRadius: 20,
+              padding: "10px 28px",
+              fontWeight: 700,
+              cursor: "pointer",
+              fontSize: 18,
+              boxShadow: "0 2px 8px #2196f322",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              transition: "background 0.2s",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              const url = window.location.origin + "/post/" + post.id;
+              navigator.clipboard.writeText(url);
+              window.alert("Đã copy link bài viết!");
+            }}
+          >
+            <span style={{ fontSize: 22, marginRight: 6 }}>📤</span>{" "}
+            <span>Chia sẻ</span>
+          </button>
+        )}
       </div>
       <div
         style={{

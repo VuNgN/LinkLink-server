@@ -25,6 +25,13 @@ export default function PostDetailPage() {
           navigate(`/login?redirect=/post/${id}`);
           return;
         }
+        if (res.status === 404) {
+          // Bài viết không tồn tại hoặc đã bị xóa
+          setError("Bài viết này không tồn tại hoặc đã bị xóa.");
+          setPost(null);
+          setLoading(false);
+          return;
+        }
         if (res.status === 451) {
           // Không phải chủ post, không có quyền xem bài private
           const data = await res.json().catch(() => ({}));
@@ -80,6 +87,13 @@ export default function PostDetailPage() {
       const res = await api.get(`/api/v1/posters/${id}`, {}, navigate);
       if (res.status === 401) {
         navigate(`/login?redirect=/post/${id}`);
+        return;
+      }
+      if (res.status === 404) {
+        // Bài viết không tồn tại hoặc đã bị xóa
+        setError("Bài viết này không tồn tại hoặc đã bị xóa.");
+        setPost(null);
+        setLoading(false);
         return;
       }
       if (res.status === 451) {

@@ -3,8 +3,6 @@
 Test script to verify expired token handling
 """
 
-import json
-import time
 
 import requests
 
@@ -30,7 +28,7 @@ def test_expired_token_handling():
 
     login_result = response.json()
     access_token = login_result.get("access_token")
-    cookies = response.cookies
+    response.cookies
     print(f"Got access token: {access_token[:20]}...")
 
     # 2. Test home page with valid token (should show all posts)

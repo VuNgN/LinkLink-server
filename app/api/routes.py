@@ -4,29 +4,25 @@ API routes - Presentation layer
 
 import os
 import shutil
-from datetime import datetime
 from typing import List, Optional
 
-from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Path,
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, Path,
                      Request, Response, Security, UploadFile, status)
 from fastapi.security.utils import get_authorization_scheme_param
-from pydantic import BaseModel
-from sqlalchemy import delete as sqlalchemy_delete
-from sqlalchemy import desc, or_, select, update
+from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import get_db_session
-from app.infrastructure.models import PosterModel
+from app.infrastructure.models import ImageModel, PosterModel
 from app.infrastructure.notifier import post_notifier
 
 from ..core.entities import (AdminApprovalRequest, ArchivedPoster, ImageInfo,
-                             LogoutRequest, PendingUserInfo, Poster,
-                             RefreshTokenRequest, Token, User, UserCreate,
+                             PendingUserInfo, Poster, Token, User, UserCreate,
                              UserLogin, UserRegistrationResponse)
 from ..core.services import AuthService, ImageService
 from .dependencies import (get_auth_service, get_current_admin_user,
                            get_current_user, get_image_service,
-                           get_optional_user, get_poster_service)
+                           get_poster_service)
 
 
 class TokenWithUsername(Token):
@@ -42,6 +38,17 @@ def public_image_path(image_path):
     return f"/uploads/{filename}" if filename else ""
 
 
+def to_public_path(fp):
+    if not fp:
+        return ""
+    fp = fp.replace("\\", "/")
+    if fp.startswith("/uploads/"):
+        return fp
+    if fp.startswith("uploads/"):
+        return "/" + fp
+    return "/uploads/" + os.path.basename(fp)
+
+
 @router.post(
     "/register",
     response_model=UserRegistrationResponse,
@@ -50,26 +57,18 @@ def public_image_path(image_path):
     description="""
     Register a new user account with username, email, and password.
     The account will be pending admin approval before activation.
-    
     ## Requirements
-    
     - **Username**: 3-50 characters, unique
     - **Email**: Valid email address, unique
     - **Password**: 6-100 characters
-    
     ## Process
-    
     1. User submits registration
     2. Admin receives email notification
     3. Admin approves/rejects the account
     4. User receives approval/rejection notification
-    
     ## Response
-    
     Returns a success message indicating the account is pending approval.
-    
     ## Errors
-    
     - `400 Bad Request`: Invalid input data, username exists, or email exists
     """,
     responses={
@@ -98,10 +97,8 @@ async def register(
 ):
     """
     Register a new user account (pending admin approval).
-
     This endpoint creates a new user account with pending status.
     The admin will receive an email notification and can approve/reject the account.
-
     **Example Request:**
     ```json
     {
@@ -124,14 +121,10 @@ async def register(
     description="""
     Approve or reject a pending user registration.
     Only accessible by admin users.
-    
     ## Actions
-    
     - **approve**: Activate the user account
     - **reject**: Reject the user registration
-    
     ## Notifications
-    
     - User receives email notification of approval/rejection
     - Admin can provide optional reason for rejection
     """,
@@ -163,7 +156,6 @@ async def approve_user(
 ):
     """
     Approve or reject a user registration.
-
     **Example Request:**
     ```json
     {
@@ -177,7 +169,6 @@ async def approve_user(
     # TODO: Add admin role check
     # if not current_user.is_admin:
     #     raise HTTPException(status_code=401, detail="Admin access required")
-
     try:
         return await auth_service.approve_user(request)
     except ValueError as e:
@@ -192,9 +183,7 @@ async def approve_user(
     description="""
     Get a list of all users with pending registration status.
     Only accessible by admin users.
-    
     ## Response
-    
     Returns a list of pending users with their registration details.
     """,
     responses={
@@ -226,13 +215,11 @@ async def get_pending_users(
 ):
     """
     Get list of pending user registrations.
-
     Returns all users who have registered but are waiting for admin approval.
     """
     # TODO: Add admin role check
     # if not current_user.is_admin:
     #     raise HTTPException(status_code=401, detail="Admin access required")
-
     return await auth_service.get_pending_users()
 
 
@@ -243,16 +230,12 @@ async def get_pending_users(
     summary="Login user and get access tokens",
     description="""
     Authenticate a user and return JWT access and refresh tokens.
-    
     ## Authentication Flow
-    
     1. Send username and password
     2. Receive access and refresh tokens
     3. Use access token for API requests
     4. Refresh token when access token expires
-    
     ## Token Usage
-    
     Include the access token in the Authorization header:
     ```
     Authorization: Bearer <access_token>
@@ -289,10 +272,8 @@ async def login(
 ):
     """
     Login user and receive JWT tokens.
-
     Authenticates the user with username and password, then returns
     JWT access and refresh tokens for API access.
-
     **Example Request:**
     ```json
     {
@@ -331,14 +312,10 @@ async def login(
     summary="Refresh access token",
     description="""
     Get a new access token using a valid refresh token.
-    
     ## When to Use
-    
     - Access token has expired
     - Need to continue API access without re-login
-    
     ## Token Expiration
-    
     - **Access Token**: 30 minutes
     - **Refresh Token**: 7 days
     """,
@@ -393,9 +370,7 @@ async def refresh_token(
     summary="Logout user and invalidate tokens",
     description="""
     Logout the current user and invalidate their refresh token.
-    
     ## Security
-    
     - Invalidates the refresh token on the server
     - Client should also clear stored tokens
     - Forces re-authentication for future requests
@@ -429,22 +404,16 @@ async def logout(
     summary="Upload an image file",
     description="""
     Upload an image file to the server.
-    
     ## File Requirements
-    
     - **Supported formats**: JPEG, PNG, GIF, WebP
     - **Maximum size**: 10MB
     - **Authentication**: Required (Bearer token)
-    
     ## File Processing
-    
     - File is validated for type and size
     - Unique filename is generated
     - File is stored securely
     - Metadata is saved to database
-    
     ## Security
-    
     - Only authenticated users can upload
     - Files are isolated per user
     - Original filename is preserved
@@ -489,17 +458,14 @@ async def upload_image(
 ):
     """
     Upload an image file to the server.
-
     The file will be validated, processed, and stored securely.
     Only the authenticated user can access their uploaded images.
-
     **Supported file types**: JPEG, PNG, GIF, WebP
     **Maximum file size**: 10MB
     """
     try:
         # Read file content
         file_content = await file.read()
-
         # Upload image
         image = await image_service.upload_image(
             username=current_user.username,
@@ -507,7 +473,6 @@ async def upload_image(
             content_type=file.content_type or "application/octet-stream",
             original_filename=file.filename or "unknown",
         )
-
         return {
             "message": "Image uploaded successfully",
             "filename": image.filename,
@@ -529,18 +494,14 @@ async def upload_image(
     summary="Get all images for current user",
     description="""
     Retrieve all images uploaded by the authenticated user.
-    
     ## Response
-    
     Returns a list of image information including:
     - Filename (unique identifier)
     - Original filename
     - File size in bytes
     - Content type (MIME type)
     - Upload date
-    
     ## Access Control
-    
     - Only returns images owned by the authenticated user
     - No access to other users' images
     - Empty list if no images uploaded
@@ -557,13 +518,7 @@ async def upload_image(
                             "upload_date": "2024-01-15T10:30:00Z",
                             "file_size": 1024000,
                             "content_type": "image/jpeg",
-                        },
-                        {
-                            "filename": "def456_profile.png",
-                            "original_filename": "profile.png",
-                            "upload_date": "2024-01-14T15:20:00Z",
-                            "file_size": 512000,
-                            "content_type": "image/png",
+                            "file_path": "/uploads/abc123_vacation.jpg",
                         },
                     ]
                 }
@@ -584,12 +539,15 @@ async def get_images(
 ):
     """
     Get all images uploaded by the current user.
-
     Returns a list of image metadata for all images owned by the authenticated user.
     The actual image files can be accessed via the `/uploads/{filename}` endpoint.
     """
     try:
-        return await image_service.get_user_images(current_user.username)
+        images = await image_service.get_user_images(current_user.username)
+        # Ensure file_path is public
+        for img in images:
+            img["file_path"] = to_public_path(img.get("file_path", ""))
+        return images
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error retrieving images: {str(e)}"
@@ -602,18 +560,12 @@ async def get_images(
     summary="Get specific image information",
     description="""
     Retrieve detailed information about a specific image.
-    
     ## Parameters
-    
     - `filename`: The unique filename of the image
-    
     ## Access Control
-    
     - Only the image owner can access image information
     - Returns 404 if image doesn't exist or user doesn't own it
-    
     ## Usage
-    
     Use this endpoint to get metadata before displaying or downloading an image.
     """,
     responses={
@@ -651,18 +603,16 @@ async def get_image(
 ):
     """
     Get detailed information about a specific image.
-
     Returns complete metadata for the specified image, including file path,
     size, content type, and upload date.
     """
     image = await image_service.get_image(filename, current_user.username)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-
     return {
         "filename": image.filename,
         "original_filename": image.original_filename,
-        "file_path": image.file_path,
+        "file_path": to_public_path(image.file_path),
         "file_size": image.file_size,
         "content_type": image.content_type,
         "upload_date": image.upload_date.isoformat(),
@@ -675,18 +625,12 @@ async def get_image(
     summary="Delete an image",
     description="""
     Delete a specific image from the server.
-    
     ## Parameters
-    
     - `filename`: The unique filename of the image to delete
-    
     ## Access Control
-    
     - Only the image owner can delete the image
     - Returns 404 if image doesn't exist or user doesn't own it
-    
     ## Effects
-    
     - Removes the image file from storage
     - Deletes the image record from database
     - Action cannot be undone
@@ -719,14 +663,12 @@ async def delete_image(
 ):
     """
     Delete a specific image from the server.
-
     Permanently removes the image file and its database record.
     This action cannot be undone.
     """
     success = await image_service.delete_image(filename, current_user.username)
     if not success:
         raise HTTPException(status_code=404, detail="Image not found")
-
     return {"message": "Image deleted successfully"}
 
 
@@ -757,20 +699,37 @@ async def create_poster(
     poster = PosterModel(
         username=current_user.username,
         message=message,
-        image_path=image_path,
         privacy=privacy,
     )
     db.add(poster)
     await db.commit()
     await db.refresh(poster)
+    # Create ImageModel and link to poster
+    image_model = ImageModel(
+        filename=image_filename,
+        original_filename=image.filename,
+        username=current_user.username,
+        file_path=image_path,
+        file_size=image.size,
+        content_type=image.content_type or "application/octet-stream",
+        poster_id=poster.id,
+    )
+    db.add(image_model)
+    await db.commit()
     poster_obj = Poster.from_orm(poster)
+    poster_obj.images = [
+        {
+            "filename": image_model.filename,
+            "file_path": to_public_path(image_model.file_path),
+        }
+    ]
     # Notify all clients except the poster, chỉ khi public/community
     if privacy in ("public", "community"):
         try:
             await post_notifier.broadcast_new_post(current_user.username)
         except Exception:
             pass
-    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
+    return poster_obj.dict()
 
 
 @router.get(
@@ -800,7 +759,7 @@ async def get_posters(
                 else:
                     # Token is valid but user is not active/approved
                     raise Exception("Inactive or unapproved user")
-            except Exception as e:
+            except Exception:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token expired or invalid",
@@ -815,7 +774,6 @@ async def get_posters(
             )
     else:
         current_user = None
-
     # Nếu user chưa đăng nhập, chỉ trả về post public
     username = getattr(current_user, "username", None)
     if username is not None:
@@ -828,7 +786,7 @@ async def get_posters(
                     (PosterModel.privacy == "community"),
                     (PosterModel.username == username),
                 ),
-                PosterModel.is_deleted == False,
+                PosterModel.is_deleted.is_(False),
             )
             .order_by(desc(PosterModel.created_at))
             .limit(limit)
@@ -838,18 +796,27 @@ async def get_posters(
         # Chưa đăng nhập: chỉ lấy post public, chưa bị xóa
         stmt = (
             select(PosterModel)
-            .where((PosterModel.privacy == "public"), PosterModel.is_deleted == False)
+            .where((PosterModel.privacy == "public"), PosterModel.is_deleted.is_(False))
             .order_by(desc(PosterModel.created_at))
             .limit(limit)
             .offset(offset)
         )
     result = await db.execute(stmt)
     posters = result.scalars().all()
-    poster_objs = [Poster.from_orm(p) for p in posters]
-    return [
-        {**po.dict(), "image_path": public_image_path(po.image_path)}
-        for po in poster_objs
-    ]
+    poster_objs = []
+    for p in posters:
+        # Lấy danh sách images liên kết với poster
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == p.id)
+        )
+        images = images_result.scalars().all()
+        poster_obj = Poster.from_orm(p)
+        poster_obj.images = [
+            {"filename": img.filename, "file_path": to_public_path(img.file_path)}
+            for img in images
+        ]
+        poster_objs.append(poster_obj)
+    return [po.dict() for po in poster_objs]
 
 
 @router.patch(
@@ -870,6 +837,7 @@ async def edit_poster(
     ),
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     image_content = None
     image_filename = None
@@ -885,7 +853,49 @@ async def edit_poster(
             image_filename=image_filename,
             privacy=privacy,
         )
-        return {**poster.dict(), "image_path": public_image_path(poster.image_path)}
+        # Handle image update if provided
+        if image_content is not None and image_filename is not None:
+            # Delete old images for this poster
+            old_images_result = await db.execute(
+                select(ImageModel).where(ImageModel.poster_id == poster_id)
+            )
+            old_images = old_images_result.scalars().all()
+            for old_img in old_images:
+                # Delete file from storage
+                if os.path.exists(old_img.file_path):
+                    os.remove(old_img.file_path)
+                # Delete from database
+                await db.delete(old_img)
+            # Create new image
+            upload_dir = "uploads"
+            os.makedirs(upload_dir, exist_ok=True)
+            new_image_filename = f"{current_user.username}_{image_filename}"
+            new_image_path = os.path.join(upload_dir, new_image_filename)
+            with open(new_image_path, "wb") as buffer:
+                buffer.write(image_content)
+            # Create new ImageModel
+            new_image_model = ImageModel(
+                filename=new_image_filename,
+                original_filename=image_filename,
+                username=current_user.username,
+                file_path=new_image_path,
+                file_size=len(image_content),
+                content_type=image.content_type or "application/octet-stream",
+                poster_id=poster_id,
+            )
+            db.add(new_image_model)
+            await db.commit()
+        # Get updated poster with images
+        poster_obj = Poster.from_orm(poster)
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster.id)
+        )
+        images = images_result.scalars().all()
+        poster_obj.images = [
+            {"filename": img.filename, "file_path": to_public_path(img.file_path)}
+            for img in images
+        ]
+        return poster_obj.dict()
     except ValueError as e:
         raise HTTPException(
             status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)
@@ -902,8 +912,20 @@ async def delete_poster(
     poster_id: int,
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
+        # Delete associated images first
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster_id)
+        )
+        images = images_result.scalars().all()
+        for img in images:
+            # Delete file from storage
+            if os.path.exists(img.file_path):
+                os.remove(img.file_path)
+            # Delete from database
+            await db.delete(img)
         await poster_service.delete_poster(poster_id, current_user.username)
         return {"message": "Poster deleted successfully"}
     except ValueError as e:
@@ -926,15 +948,27 @@ async def delete_poster(
 async def get_deleted_posters(
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     """
     Get all deleted (trashed) posters for the current user.
     Returns a list of posts that are in the trash (soft deleted, not yet permanently removed).
     """
     deleted = await poster_service.get_deleted_posts(current_user.username)
-    return [
-        {**po.dict(), "image_path": public_image_path(po.image_path)} for po in deleted
-    ]
+    # Add images to each poster
+    result = []
+    for poster in deleted:
+        poster_obj = Poster.from_orm(poster)
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster.id)
+        )
+        images = images_result.scalars().all()
+        poster_obj.images = [
+            {"filename": img.filename, "file_path": to_public_path(img.file_path)}
+            for img in images
+        ]
+        result.append(poster_obj.dict())
+    return result
 
 
 @router.delete(
@@ -950,11 +984,26 @@ async def get_deleted_posters(
 async def hard_delete_all_deleted_posters(
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     """
     Permanently delete all posts from the trash (hard delete).
     All posts' metadata will be archived, and image files will be removed.
     """
+    # Get all deleted posters for this user
+    deleted_posters = await poster_service.get_deleted_posts(current_user.username)
+    # Delete associated images first
+    for poster in deleted_posters:
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster.id)
+        )
+        images = images_result.scalars().all()
+        for img in images:
+            # Delete file from storage
+            if os.path.exists(img.file_path):
+                os.remove(img.file_path)
+            # Delete from database
+            await db.delete(img)
     count = await poster_service.hard_delete_all_deleted(current_user.username)
     return {"message": f"{count} deleted posters permanently removed"}
 
@@ -1008,7 +1057,7 @@ async def get_poster_detail(
                 else:
                     # Token is valid but user is not active/approved
                     raise Exception("Inactive or unapproved user")
-            except Exception as e:
+            except Exception:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token expired or invalid",
@@ -1023,9 +1072,11 @@ async def get_poster_detail(
             )
     else:
         current_user = None
-
     poster = await db.get(PosterModel, poster_id)
     if poster is None:
+        raise HTTPException(status_code=404, detail="Poster not found")
+    # Check if poster has been deleted
+    if poster.is_deleted:
         raise HTTPException(status_code=404, detail="Poster not found")
     privacy = str(poster.privacy) if poster.privacy is not None else None
     if privacy == "public":
@@ -1034,7 +1085,7 @@ async def get_poster_detail(
         # community hoặc private đều cần đăng nhập
         if current_user is None:
             raise HTTPException(
-                status_code=403, detail="You must be logged in to view this poster"
+                status_code=401, detail="You must be logged in to view this poster"
             )
         if privacy == "community":
             pass  # chỉ cần đăng nhập là xem được
@@ -1044,7 +1095,16 @@ async def get_poster_detail(
                     status_code=451, detail="Not allowed to view this poster (private)"
                 )
     poster_obj = Poster.from_orm(poster)
-    return {**poster_obj.dict(), "image_path": public_image_path(poster_obj.image_path)}
+    # Lấy danh sách images liên kết với poster
+    images_result = await db.execute(
+        select(ImageModel).where(ImageModel.poster_id == poster.id)
+    )
+    images = images_result.scalars().all()
+    poster_obj.images = [
+        {"filename": img.filename, "file_path": to_public_path(img.file_path)}
+        for img in images
+    ]
+    return poster_obj.dict()
 
 
 @router.delete(
@@ -1063,8 +1123,20 @@ async def hard_delete_single_deleted_poster(
     poster_id: int,
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
+        # Delete associated images first
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster_id)
+        )
+        images = images_result.scalars().all()
+        for img in images:
+            # Delete file from storage
+            if os.path.exists(img.file_path):
+                os.remove(img.file_path)
+            # Delete from database
+            await db.delete(img)
         archived = await poster_service.hard_delete_post(
             poster_id, current_user.username
         )
@@ -1089,10 +1161,21 @@ async def restore_deleted_poster(
     poster_id: int,
     current_user: User = Depends(get_current_user),
     poster_service=Depends(get_poster_service),
+    db: AsyncSession = Depends(get_db_session),
 ):
     try:
         poster = await poster_service.restore_post(poster_id, current_user.username)
-        return {**poster.dict(), "image_path": public_image_path(poster.image_path)}
+        # Get restored poster with images
+        poster_obj = Poster.from_orm(poster)
+        images_result = await db.execute(
+            select(ImageModel).where(ImageModel.poster_id == poster.id)
+        )
+        images = images_result.scalars().all()
+        poster_obj.images = [
+            {"filename": img.filename, "file_path": to_public_path(img.file_path)}
+            for img in images
+        ]
+        return poster_obj.dict()
     except ValueError as e:
         raise HTTPException(
             status_code=403 if "not allowed" in str(e).lower() else 404, detail=str(e)

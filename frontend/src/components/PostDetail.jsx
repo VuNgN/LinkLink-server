@@ -2,10 +2,15 @@ import React from "react";
 
 function PostDetail({ post, onEdit, onDelete }) {
   if (!post) return null;
-  let imageUrl = post.image_path;
-  if (imageUrl && !imageUrl.startsWith("/uploads/")) {
-    const idx = imageUrl.lastIndexOf("/uploads/");
-    if (idx !== -1) imageUrl = imageUrl.slice(idx);
+  let imageUrls = [];
+  if (
+    Array.isArray(post.images) &&
+    post.images.length > 0 &&
+    post.images[0].file_path
+  ) {
+    imageUrls = post.images.map((img) => img.file_path);
+  } else if (post.file_path || post.image_path) {
+    imageUrls = [post.file_path || post.image_path];
   }
   let createdAt = "";
   if (post.created_at) {
@@ -40,18 +45,21 @@ function PostDetail({ post, onEdit, onDelete }) {
         justifyContent: "center",
       }}
     >
-      <img
-        src={imageUrl}
-        alt={post.message}
-        style={{
-          width: "100%",
-          maxHeight: "55vh",
-          objectFit: "contain",
-          borderRadius: 8,
-          marginBottom: 16,
-          background: "#fafafa",
-        }}
-      />
+      {imageUrls.map((url) => (
+        <img
+          key={url}
+          src={url}
+          alt={post.message}
+          style={{
+            width: "100%",
+            maxHeight: "55vh",
+            objectFit: "contain",
+            borderRadius: 8,
+            marginBottom: 16,
+            background: "#fafafa",
+          }}
+        />
+      ))}
       <div style={{ marginBottom: 8 }}>
         <span
           style={{
@@ -133,8 +141,9 @@ function PostDetail({ post, onEdit, onDelete }) {
           marginTop: 24,
         }}
       >
+        {/* Download first image only for now */}
         <a
-          href={imageUrl}
+          href={imageUrls[0]}
           download
           style={{
             display: "inline-block",

@@ -5,7 +5,6 @@ Minimal Database Setup Script
 - Creates default admin user (admin/admin123)
 """
 import asyncio
-import os
 from datetime import datetime
 
 from dotenv import load_dotenv

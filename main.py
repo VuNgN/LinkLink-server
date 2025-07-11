@@ -2,10 +2,8 @@
 Main application entry point using Clean Architecture with PostgreSQL
 """
 
-import asyncio
 import logging
 import os
-from typing import List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.infrastructure.database import close_db, init_db
-from app.infrastructure.notifier import PostNotifier, post_notifier
+from app.infrastructure.notifier import post_notifier
 
 # Setup logging
 logging.basicConfig(
@@ -152,7 +150,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         start_time = time.time()
         try:
             response = await call_next(request)
-        except Exception as exc:
+        except Exception:
             logger.exception(f"Error handling request: {request.method} {request.url}")
             raise
         process_time = (time.time() - start_time) * 1000
