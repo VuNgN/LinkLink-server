@@ -3,21 +3,15 @@ Authentication login routes
 Handles login, refresh token, and logout
 """
 
-from typing import Optional
+from datetime import datetime, timezone
 
 from fastapi import (APIRouter, Depends, HTTPException, Request, Response,
                      status)
 from fastapi.security.utils import get_authorization_scheme_param
 
-from ....core.entities import Token, User, UserLogin
+from ....core.entities import TokenWithUsername, User, UserLogin
 from ....core.services import AuthService
 from ...dependencies import get_auth_service, get_current_user
-
-
-class TokenWithUsername(Token):
-    refresh_token: Optional[str] = None
-    username: str
-
 
 router = APIRouter()
 
@@ -87,11 +81,15 @@ async def login(
     """
     try:
         token_data = await auth_service.login_user(credentials)
+        # Convert expires_at datetime to expires_in seconds
+        expires_in = int(
+            (token_data["expires_at"] - datetime.now(timezone.utc)).total_seconds()
+        )
         return TokenWithUsername(
             access_token=token_data["access_token"],
             refresh_token=token_data["refresh_token"],
             token_type=token_data["token_type"],
-            expires_at=token_data["expires_at"],
+            expires_in=expires_in,
             username=token_data["username"],
         )
     except ValueError as e:
@@ -167,11 +165,15 @@ async def refresh_token(
 
     try:
         token_data = await auth_service.refresh_access_token(param)
+        # Convert expires_at datetime to expires_in seconds
+        expires_in = int(
+            (token_data["expires_at"] - datetime.now(timezone.utc)).total_seconds()
+        )
         return TokenWithUsername(
             access_token=token_data["access_token"],
             refresh_token=token_data["refresh_token"],
             token_type=token_data["token_type"],
-            expires_at=token_data["expires_at"],
+            expires_in=expires_in,
             username=token_data["username"],
         )
     except ValueError as e:

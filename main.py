@@ -4,6 +4,7 @@ Main application entry point using Clean Architecture with PostgreSQL
 
 import os
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,23 @@ setup_logging(
     level=os.getenv("LOG_LEVEL", "INFO"), log_file=os.getenv("LOG_FILE", "logs/app.log")
 )
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    logger.info("🚀 Starting Image Upload Server with PostgreSQL...")
+    await init_db()
+    logger.info("✅ Database initialized successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("🛑 Shutting down server...")
+    await close_db()
+    logger.info("✅ Database connections closed")
+
 
 # Create FastAPI app with enhanced metadata
 app = FastAPI(
@@ -135,6 +153,7 @@ open http://localhost:8000/docs
             "description": "Server health and status endpoints.",
         },
     ],
+    lifespan=lifespan,
 )
 
 # Setup exception handlers
@@ -179,9 +198,11 @@ app.mount("/admin", StaticFiles(directory="admin"), name="admin")
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
-app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")
+if os.path.exists(frontend_dist):
+    app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")
 
 
+# Place the catch-all route at the very end to avoid shadowing other routes
 @app.get("/{full_path:path}", response_class=FileResponse)
 async def spa_catch_all(full_path: str):
     # Không intercept các route API, uploads, admin
@@ -191,6 +212,11 @@ async def spa_catch_all(full_path: str):
         or full_path.startswith("admin/")
     ):
         return HTMLResponse(content="Not found", status_code=404)
+
+    # Only serve frontend files if the directory exists
+    if not os.path.exists(frontend_dist):
+        return HTMLResponse(content="Frontend not available", status_code=404)
+
     static_file = os.path.join(frontend_dist, full_path)
     if os.path.isfile(static_file):
         return FileResponse(static_file)
@@ -255,22 +281,6 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    logger.info("🚀 Starting Image Upload Server with PostgreSQL...")
-    await init_db()
-    logger.info("✅ Database initialized successfully")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up database connections on shutdown"""
-    logger.info("🛑 Shutting down server...")
-    await close_db()
-    logger.info("✅ Database connections closed")
 
 
 @app.get("/api-root", tags=["Health"])

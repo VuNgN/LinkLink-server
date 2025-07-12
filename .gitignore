@@ -212,10 +212,3 @@ frontend/node_modules/
 # (Optional) Frontend environment files
 frontend/.env
 frontend/.env.local
-
-# Tests
-/tests/
-/tests/test_client.py
-/tests/test_expired_token.py
-/tests/test_refresh_token.py
-/tests/test_image.jpg
