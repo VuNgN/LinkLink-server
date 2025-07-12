@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-image-upload-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-image_upload_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5434:5432"  # Different port for production
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - image_upload_prod_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d image_upload_prod"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  app:
+    build: .
+    container_name: image-upload-app-prod
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/image_upload_prod
+      - SECRET_KEY=${SECRET_KEY}
+      - LOG_LEVEL=WARNING
+    ports:
+      - "8002:8000"  # Different port for production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - image_upload_prod_network
+    volumes:
+      - ./uploads:/app/uploads
+    # Production security settings
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /var/tmp
+
+  # Nginx reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-image-upload-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - image_upload_prod_network
+
+volumes:
+  postgres_prod_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/postgres/prod_data
+  nginx_logs:
+    driver: local
+
+networks:
+  image_upload_prod_network:
+    driver: bridge 

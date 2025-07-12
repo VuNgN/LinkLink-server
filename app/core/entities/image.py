@@ -4,11 +4,25 @@ Image domain entities
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Image(BaseModel):
     """Image domain entity"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "filename": "abc123_vacation.jpg",
+                "original_filename": "vacation.jpg",
+                "username": "john_doe",
+                "file_path": "/uploads/abc123_vacation.jpg",
+                "file_size": 1024000,
+                "content_type": "image/jpeg",
+                "upload_date": "2024-01-15T10:30:00Z",
+            }
+        }
+    )
 
     filename: str = Field(
         ...,
@@ -31,38 +45,26 @@ class Image(BaseModel):
         description="Timestamp when the image was uploaded",
     )
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "filename": "abc123_vacation.jpg",
-                "original_filename": "vacation.jpg",
-                "username": "john_doe",
-                "file_path": "/uploads/abc123_vacation.jpg",
-                "file_size": 1024000,
-                "content_type": "image/jpeg",
-                "upload_date": "2024-01-15T10:30:00Z",
-            }
-        }
-
 
 class ImageInfo(BaseModel):
     """Image information DTO"""
 
-    filename: str = Field(description="Unique filename of the image")
-    original_filename: str = Field(
-        description="Original filename as uploaded by the user"
-    )
-    upload_date: datetime = Field(description="Timestamp when the image was uploaded")
-    file_size: int = Field(description="File size in bytes")
-    content_type: str = Field(description="MIME type of the image file")
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "filename": "abc123_vacation.jpg",
                 "original_filename": "vacation.jpg",
-                "upload_date": "2024-01-15T10:30:00Z",
+                "username": "john_doe",
                 "file_size": 1024000,
                 "content_type": "image/jpeg",
+                "upload_date": "2024-01-15T10:30:00Z",
             }
         }
+    )
+
+    filename: str = Field(..., description="Unique filename of the image")
+    original_filename: str = Field(..., description="Original filename")
+    username: str = Field(..., description="Username of the image owner")
+    file_size: int = Field(..., description="File size in bytes")
+    content_type: str = Field(..., description="MIME type of the image")
+    upload_date: datetime = Field(..., description="Upload timestamp")

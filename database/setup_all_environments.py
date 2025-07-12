@@ -6,9 +6,14 @@ Setup all environments (production & development) for LinkLink Image Upload Serv
 - Ignore nếu database đã tồn tại để tránh override
 - Idempotent: chạy lại không bị lỗi, không override dữ liệu cũ
 """
-import asyncio
 import os
 import sys
+
+# Add the project root to Python path BEFORE any other imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
+
+import asyncio
 from datetime import datetime
 from pathlib import Path
 
@@ -18,14 +23,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+# flake8: noqa: E402
 from app.core.entities.album import Album  # noqa: F401
 from app.core.entities.image import Image  # noqa: F401
 from app.core.entities.poster import Poster  # noqa: F401
 from app.core.entities.user import User, UserStatus  # noqa: F401
 from app.infrastructure.database import Base
 from app.infrastructure.repositories import PostgreSQLUserRepository
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def load_env_file(env_path):
@@ -110,6 +114,7 @@ async def create_admin_user(async_engine):
             approved_by="system",
         )
         await user_repo.create(admin_user)
+        await session.commit()
         print(f"👤 Created admin user: {admin_username}/{admin_password}")
 
 
@@ -148,8 +153,25 @@ async def setup_env(env_name, env_path):
 
 async def main():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    await setup_env("Development", os.path.join(project_root, ".env.development"))
-    print("\n🎉 Dev environment setup completed!")
+
+    # Try development environment first
+    dev_env_path = os.path.join(project_root, ".env.development")
+    if os.path.exists(dev_env_path):
+        await setup_env("Development", dev_env_path)
+    else:
+        # For CI environment, use current environment variables
+        print("No .env.development found, using current environment variables")
+        db_url = get_db_url()
+        if db_url:
+            async_engine = create_async_engine(db_url, echo=False)
+            await create_tables_and_migrations(async_engine)
+            await create_admin_user(async_engine)
+            await async_engine.dispose()
+            print("✅ CI environment setup completed!")
+        else:
+            print("❌ DATABASE_URL not found in environment variables")
+
+    print("\n🎉 Environment setup completed!")
 
 
 if __name__ == "__main__":
