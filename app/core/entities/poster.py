@@ -5,24 +5,15 @@ Poster domain entities
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class Poster(BaseModel):
     """Poster domain entity"""
 
-    id: int
-    username: str
-    message: str
-    created_at: datetime
-    privacy: str  # 'public', 'community', or 'private'
-    is_deleted: bool = False
-    deleted_at: Optional[datetime] = None
-    images: Optional[list] = None  # List of linked images
-
-    class Config:
-        from_attributes = True
-        schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "id": 1,
                 "username": "john_doe",
@@ -33,26 +24,25 @@ class Poster(BaseModel):
                 "deleted_at": None,
                 "images": [],
             }
-        }
+        },
+    )
+
+    id: int
+    username: str
+    message: str
+    created_at: datetime
+    privacy: str  # 'public', 'community', or 'private'
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    images: Optional[list] = None  # List of linked images
 
 
 class ArchivedPoster(BaseModel):
     """Archived poster entity for permanently deleted posts (metadata only)"""
 
-    id: Optional[int] = None
-    original_id: int
-    username: str
-    message: str
-    original_image_path: str
-    image_filename: str
-    created_at: datetime
-    deleted_at: datetime
-    archived_at: datetime
-    privacy: str
-
-    class Config:
-        from_attributes = True
-        schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "id": 1,
                 "original_id": 123,
@@ -65,4 +55,16 @@ class ArchivedPoster(BaseModel):
                 "archived_at": "2024-07-15T09:20:00Z",
                 "privacy": "public",
             }
-        }
+        },
+    )
+
+    id: Optional[int] = None
+    original_id: int
+    username: str
+    message: str
+    original_image_path: str
+    image_filename: str
+    created_at: datetime
+    deleted_at: datetime
+    archived_at: datetime
+    privacy: str

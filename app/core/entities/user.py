@@ -5,13 +5,32 @@ User domain entities
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from .enums import UserStatus
 
 
 class User(BaseModel):
     """User domain entity"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "username": "john_doe",
+                "email": "john.doe@example.com",
+                "hashed_password": (
+                    "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iQeO"
+                ),
+                "is_active": True,
+                "is_admin": False,
+                "status": "approved",
+                "created_at": "2024-01-15T10:30:00Z",
+                "updated_at": "2024-01-15T10:30:00Z",
+                "approved_at": "2024-01-15T11:00:00Z",
+                "approved_by": "admin",
+            }
+        }
+    )
 
     username: str = Field(
         ...,
@@ -51,27 +70,19 @@ class User(BaseModel):
         default=None, description="Username of the admin who approved the account"
     )
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "username": "john_doe",
-                "email": "john.doe@example.com",
-                "hashed_password": (
-                    "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iQeO"
-                ),
-                "is_active": True,
-                "is_admin": False,
-                "status": "approved",
-                "created_at": "2024-01-15T10:30:00Z",
-                "updated_at": "2024-01-15T10:30:00Z",
-                "approved_at": "2024-01-15T11:00:00Z",
-                "approved_by": "admin",
-            }
-        }
-
 
 class UserCreate(BaseModel):
     """User creation DTO"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "username": "john_doe",
+                "email": "john.doe@example.com",
+                "password": "securepassword123",
+            }
+        }
+    )
 
     username: str = Field(
         ...,
@@ -89,37 +100,25 @@ class UserCreate(BaseModel):
         description="Password for the new account (6-100 characters)",
     )
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "username": "john_doe",
-                "email": "john.doe@example.com",
-                "password": "securepassword123",
-            }
-        }
-
 
 class UserLogin(BaseModel):
     """User login DTO"""
 
-    username: str = Field(..., min_length=1, description="Username for authentication")
-    password: str = Field(..., min_length=1, description="Password for authentication")
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {"username": "john_doe", "password": "securepassword123"}
         }
+    )
+
+    username: str = Field(..., min_length=1, description="Username for authentication")
+    password: str = Field(..., min_length=1, description="Password for authentication")
 
 
 class UserRegistrationResponse(BaseModel):
     """User registration response DTO"""
 
-    message: str = Field(..., description="Registration status message")
-    status: str = Field(default="pending", description="Registration status")
-    email: str = Field(..., description="Email address used for registration")
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "message": (
                     "Registration submitted successfully. "
@@ -129,10 +128,26 @@ class UserRegistrationResponse(BaseModel):
                 "email": "john.doe@example.com",
             }
         }
+    )
+
+    message: str = Field(..., description="Registration status message")
+    status: str = Field(default="pending", description="Registration status")
+    email: str = Field(..., description="Email address used for registration")
 
 
 class AdminApprovalRequest(BaseModel):
     """Admin approval request DTO"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "username": "john_doe",
+                "action": "approve",
+                "admin_username": "admin",
+                "reason": "Account looks legitimate",
+            }
+        }
+    )
 
     username: str = Field(..., description="Username of the user to approve/reject")
     action: str = Field(..., description="Action to take: 'approve' or 'reject'")
@@ -143,29 +158,20 @@ class AdminApprovalRequest(BaseModel):
         default=None, description="Reason for approval/rejection (optional)"
     )
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "username": "john_doe",
-                "action": "approve",
-                "admin_username": "admin",
-                "reason": "Account looks legitimate",
-            }
-        }
-
 
 class PendingUserInfo(BaseModel):
     """Pending user information DTO"""
 
-    username: str = Field(description="Username of the pending user")
-    email: str = Field(description="Email address of the pending user")
-    created_at: datetime = Field(description="Timestamp when the user registered")
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "username": "john_doe",
                 "email": "john.doe@example.com",
                 "created_at": "2024-01-15T10:30:00Z",
             }
         }
+    )
+
+    username: str = Field(description="Username of the pending user")
+    email: str = Field(description="Email address of the pending user")
+    created_at: datetime = Field(description="Timestamp when the user registered")

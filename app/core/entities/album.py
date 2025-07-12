@@ -4,13 +4,26 @@ Album domain entities
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .enums import AlbumPrivacy
 
 
 class Album(BaseModel):
     """Album domain entity"""
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "name": "My Summer Trip",
+                "username": "john_doe",
+                "created_at": "2024-07-01T10:00:00Z",
+                "privacy": "writable",
+            }
+        },
+    )
 
     id: int
     name: str
@@ -21,37 +34,42 @@ class Album(BaseModel):
         description="Album privacy: writable or read-only",
     )
 
-    class Config:
-        from_attributes = True
-        schema_extra = {
+
+class AlbumCreate(BaseModel):
+    """Album creation DTO"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
-                "id": 1,
                 "name": "My Summer Trip",
-                "username": "john_doe",
-                "created_at": "2024-07-01T10:00:00Z",
                 "privacy": "writable",
             }
         }
+    )
+
+    name: str = Field(..., description="Album name")
+    privacy: AlbumPrivacy = Field(
+        default=AlbumPrivacy.READ_ONLY,
+        description="Album privacy setting",
+    )
 
 
 class AlbumImage(BaseModel):
-    """Album-Image link entity"""
+    """Album image entity"""
 
-    album_id: int
-    image_id: str  # image filename
-    added_by: str = Field(..., description="Username of the user who added the image")
-    added_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Timestamp when the image was added to the album",
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "album_id": 1,
+                "image_id": 1,
+                "added_at": "2024-07-01T10:00:00Z",
+            }
+        },
     )
 
-    class Config:
-        from_attributes = True
-        schema_extra = {
-            "example": {
-                "album_id": 1,
-                "image_id": "abc123_vacation.jpg",
-                "added_by": "john_doe",
-                "added_at": "2024-07-01T10:05:00Z",
-            }
-        }
+    id: int
+    album_id: int
+    image_id: int
+    added_at: datetime
