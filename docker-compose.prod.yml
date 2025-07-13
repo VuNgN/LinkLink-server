@@ -24,7 +24,7 @@ services:
       start_period: 40s
 
   app:
-    build: .
+    image: linklink-app:latest
     container_name: image-upload-app-prod
     restart: unless-stopped
     environment:
@@ -32,7 +32,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - LOG_LEVEL=WARNING
     ports:
-      - "8002:8000"  # Different port for production
+      - "8000:8000"  # Production port
     depends_on:
       postgres:
         condition: service_healthy

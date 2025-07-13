@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-image-upload-development
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-image_upload_development}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5433:5432"  # Different port for development
+    volumes:
+      - postgres_development_data:/var/lib/postgresql/data
+    networks:
+      - image_upload_development_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d image_upload_development"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  app:
+    image: linklink-app:development
+    container_name: image-upload-app-development
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/image_upload_development
+      - SECRET_KEY=${SECRET_KEY:-development_secret_key}
+      - LOG_LEVEL=INFO
+    ports:
+      - "8001:8000"  # Different port for development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - image_upload_development_network
+    volumes:
+      - ./uploads:/app/uploads
+
+  # Optional: pgAdmin for development
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-image-upload-development
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@development.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8081:80"  # Different port for development
+    volumes:
+      - pgadmin_development_data:/var/lib/pgadmin
+    networks:
+      - image_upload_development_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_development_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/postgres/development_data
+  pgadmin_development_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker/pgadmin/development_data
+
+networks:
+  image_upload_development_network:
+    driver: bridge 
