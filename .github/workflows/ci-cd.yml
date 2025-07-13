@@ -182,6 +182,21 @@ jobs:
       
 
       
+      - name: Test SSH connection
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          timeout: 30s
+          command_timeout: 60s
+          script: |
+            echo "SSH connection test successful"
+            echo "Host: $(hostname)"
+            echo "User: $(whoami)"
+            echo "Date: $(date)"
+
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -189,8 +204,10 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          timeout: 300s
-          command_timeout: 600s
+          timeout: 60s
+          command_timeout: 300s
+          use_insecure_cipher: false
+          debug: true
           script: |
             # Debug connection
             echo "Testing SSH connection..."
