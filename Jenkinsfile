@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'python node' }
 
     environment {
         // Backend
@@ -25,7 +25,6 @@ pipeline {
         }
 
         stage('Backend: Lint & Test') {
-            agent { label 'python' }
             steps {
                 dir("${BACKEND_DIR}") {
                     sh 'python3 -m venv venv'
@@ -46,7 +45,6 @@ pipeline {
         }
 
         stage('Frontend: Lint & Build') {
-            agent { label 'node' }
             steps {
                 dir("${FRONTEND_DIR}") {
                     sh 'npm ci'
