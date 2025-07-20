@@ -53,8 +53,7 @@ pipeline {
                     string(credentialsId: 'POSTGRES_PASSWORD', variable: 'POSTGRES_PASSWORD'),
                     string(credentialsId: 'LOG_LEVEL', variable: 'LOG_LEVEL'),
                     string(credentialsId: 'LOG_FILE', variable: 'LOG_FILE'),
-                    string(credentialsId: 'DEBUG', variable: 'DEBUG'),
-                    string(credentialsId: 'SERVICE_NAME', variable: 'SERVICE_NAME')
+                    string(credentialsId: 'DEBUG', variable: 'DEBUG')
                 ]) {
                     sh '''
                     cat > .env <<EOF
@@ -136,7 +135,7 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                script {
+                withCredentials([string(credentialsId: 'SERVICE_NAME', variable: 'SERVICE_NAME')]) {
                     sh 'sudo systemctl restart $SERVICE_NAME'
                 }
             }
