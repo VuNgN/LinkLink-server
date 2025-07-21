@@ -1,6 +1,12 @@
 import React from "react";
 
 function PostDetail({ post, onEdit, onDelete, initialImageIndex = 0 }) {
+  // Đặt hooks ở đầu function
+  const [carouselIdx, setCarouselIdx] = React.useState(initialImageIndex);
+  React.useEffect(() => {
+    setCarouselIdx(initialImageIndex);
+  }, [initialImageIndex]);
+
   if (!post) return null;
   let imageUrls = [];
   if (
@@ -31,11 +37,6 @@ function PostDetail({ post, onEdit, onDelete, initialImageIndex = 0 }) {
       }
     })();
   const isOwner = post.username === currentUsername;
-  const [carouselIdx, setCarouselIdx] = React.useState(initialImageIndex);
-
-  React.useEffect(() => {
-    setCarouselIdx(initialImageIndex);
-  }, [initialImageIndex]);
 
   return (
     <div
