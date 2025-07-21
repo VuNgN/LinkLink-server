@@ -1,22 +1,62 @@
 """
 Main application entry point using Clean Architecture with PostgreSQL
 """
-from fastapi import FastAPI
+
+import os
+import time
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-import asyncio
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+# Log all requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
+from app import bootstrap  # noqa: F401
 from app.api.routes import router
-from app.infrastructure.database import init_db, close_db
+from app.config import settings
+from app.exceptions import setup_exception_handlers
+from app.infrastructure.database import close_db, init_db
+from app.infrastructure.notifier import post_notifier
+from app.utils.logging import get_logger, setup_logging
+
+print("DEBUG: DATABASE_URL =", os.getenv("DATABASE_URL"))
+print("DEBUG: DATABASE_URL on setting =", settings.DATABASE_URL)
+# Setup logging
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "INFO"), log_file=os.getenv("LOG_FILE", "logs/app.log")
+)
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    logger.info("🚀 Starting Image Upload Server with PostgreSQL...")
+    await init_db()
+    logger.info("✅ Database initialized successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("🛑 Shutting down server...")
+    await close_db()
+    logger.info("✅ Database connections closed")
+
 
 # Create FastAPI app with enhanced metadata
 app = FastAPI(
-    title="🖼️ Image Upload Server API",
+    title=settings.PROJECT_NAME,
     version="2.1.0",
     description="""
 # 🚀 Image Upload Server API
 
-A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and **Clean Architecture**.
+A modern, scalable image upload server built with **FastAPI**, **PostgreSQL**, and
+**Clean Architecture**.
 
 ## ✨ Features
 
@@ -88,14 +128,8 @@ open http://localhost:8000/docs
         "url": "https://opensource.org/licenses/MIT",
     },
     servers=[
-        {
-            "url": "http://localhost:8000",
-            "description": "Development server"
-        },
-        {
-            "url": "https://api.yourapp.com",
-            "description": "Production server"
-        }
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://api.yourapp.com", "description": "Production server"},
     ],
     tags_metadata=[
         {
@@ -118,50 +152,102 @@ open http://localhost:8000/docs
             "name": "Health",
             "description": "Server health and status endpoints.",
         },
-    ]
+    ],
+    lifespan=lifespan,
 )
+
+# Setup exception handlers
+setup_exception_handlers(app)
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        logger.info(f"Request: {request.method} {request.url}")
+        start_time = time.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(f"Error handling request: {request.method} {request.url}")
+            raise
+        process_time = (time.time() - start_time) * 1000
+        logger.info(
+            f"Response: {request.method} {request.url} - Status: {response.status_code}"
+            f"- {process_time:.2f}ms"
+        )
+        return response
+
+
+app.add_middleware(LoggingMiddleware)
+
 # Include API routes
-app.include_router(router, prefix="/api/v1")
+app.include_router(router, prefix=settings.API_V1_STR)
+
+# Serve the admin directory at /admin
+app.mount("/admin", StaticFiles(directory="admin"), name="admin")
+
+# Serve uploaded images at /uploads
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
+frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/static", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+
+# Place the catch-all route at the very end to avoid shadowing other routes
+@app.get("/{full_path:path}", response_class=FileResponse)
+async def spa_catch_all(full_path: str):
+    # Không intercept các route API, uploads, admin
+    if (
+        full_path.startswith("api/")
+        or full_path.startswith("uploads/")
+        or full_path.startswith("admin/")
+    ):
+        return HTMLResponse(content="Not found", status_code=404)
+
+    # Only serve frontend files if the directory exists
+    if not os.path.exists(frontend_dist):
+        return HTMLResponse(content="Frontend not available", status_code=404)
+
+    static_file = os.path.join(frontend_dist, full_path)
+    if os.path.isfile(static_file):
+        return FileResponse(static_file)
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse(content="index.html not found", status_code=404)
+
 
 def custom_openapi():
     """Custom OpenAPI schema with enhanced documentation"""
     if app.openapi_schema:
         return app.openapi_schema
-    
+
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
-    
+
     # Add security schemes
     openapi_schema["components"]["securitySchemes"] = {
-        "BearerAuth": {
+        "HTTPBearer": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "Enter your JWT token in the format: Bearer <token>"
+            "description": "Enter your JWT token in the format: Bearer <token>",
         }
     }
-    
-    # Add global security requirement
-    openapi_schema["security"] = [
-        {
-            "BearerAuth": []
-        }
-    ]
-    
+
     # Add response examples
     openapi_schema["components"]["examples"] = {
         "LoginSuccess": {
@@ -170,8 +256,8 @@ def custom_openapi():
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "username": "john_doe"
-            }
+                "username": "john_doe",
+            },
         },
         "ImageUploadSuccess": {
             "summary": "Successful image upload response",
@@ -181,56 +267,28 @@ def custom_openapi():
                 "file_size": 1024000,
                 "original_filename": "vacation.jpg",
                 "content_type": "image/jpeg",
-                "upload_date": "2024-01-15T10:30:00Z"
-            }
+                "upload_date": "2024-01-15T10:30:00Z",
+            },
         },
         "ErrorResponse": {
             "summary": "Error response example",
-            "value": {
-                "detail": "Invalid credentials"
-            }
-        }
+            "value": {"detail": "Invalid credentials"},
+        },
     }
-    
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+
 app.openapi = custom_openapi
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    print("🚀 Starting Image Upload Server with PostgreSQL...")
-    await init_db()
-    print("✅ Database initialized successfully")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up database connections on shutdown"""
-    print("🛑 Shutting down server...")
-    await close_db()
-    print("✅ Database connections closed")
-
-@app.get("/", tags=["Health"])
+@app.get("/api-root", tags=["Health"])
 async def root():
     """
     # 🏠 API Root
-    
-    Welcome to the Image Upload Server API! This endpoint provides basic information about the API.
-    
-    ## Quick Start
-    
-    1. **Register** a new user at `/api/v1/register`
-    2. **Login** to get access tokens at `/api/v1/login`
-    3. **Upload images** at `/api/v1/upload-image`
-    4. **View documentation** at `/docs`
-    
-    ## Authentication
-    
-    Most endpoints require authentication. Include your JWT token in the Authorization header:
-    ```
-    Authorization: Bearer <your_access_token>
-    ```
+    Welcome to the Image Upload Server API! This endpoint provides basic information
+    about the API.
     """
     return {
         "message": "🖼️ Image Upload Server API (Clean Architecture + PostgreSQL)",
@@ -241,50 +299,66 @@ async def root():
             "JWT Authentication",
             "Image Upload",
             "PostgreSQL Storage",
-            "Auto-generated Docs"
+            "Auto-generated Docs",
         ],
         "endpoints": {
             "docs": "/docs",
             "redoc": "/redoc",
             "openapi": "/openapi.json",
-            "health": "/health"
+            "health": "/health",
         },
         "authentication": {
             "type": "JWT Bearer Token",
             "register": "/api/v1/register",
-            "login": "/api/v1/login"
-        }
+            "login": "/api/v1/login",
+        },
     }
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
     # 🏥 Health Check
-    
+
     Check the health status of the API server and database connection.
-    
+
     ## Response
-    
+
     - `status`: Overall health status
     - `architecture`: Software architecture used
     - `database`: Database type and status
     - `timestamp`: Current server time
-    
+
     ## Usage
-    
+
     This endpoint is useful for:
     - Load balancer health checks
     - Monitoring systems
     - DevOps automation
     """
     return {
-        "status": "healthy", 
+        "status": "healthy",
         "architecture": "clean",
         "database": "postgresql",
         "version": "2.1.0",
-        "timestamp": "2024-01-15T10:30:00Z"
+        "timestamp": "2024-01-15T10:30:00Z",
     }
+
+
+@app.websocket("/ws/posts/notify")
+async def websocket_post_notify(websocket: WebSocket):
+    # Lấy username từ query param (nếu có)
+    username = websocket.query_params.get("username") or ""
+    await post_notifier.connect(websocket, username)
+    try:
+        while True:
+            # Keep connection alive, ignore incoming messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        post_notifier.disconnect(websocket)
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

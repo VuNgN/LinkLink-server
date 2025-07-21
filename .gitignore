@@ -1,6 +1,7 @@
 # Environment variables and secrets
 .env
 .env.local
+.env.development
 .env.production
 .env.staging
 secrets/
@@ -23,7 +24,9 @@ ssh_config.backup
 docker/postgres/data/
 docker/pgadmin/data/
 backups/
+# Exclude SQL files except migration scripts
 *.sql
+!database/*.sql
 *.dump
 
 # Python
@@ -199,3 +202,13 @@ logs/
 # Local development
 local/
 dev/ 
+
+# React frontend build output
+frontend/dist/
+
+# Node dependencies
+frontend/node_modules/
+
+# (Optional) Frontend environment files
+frontend/.env
+frontend/.env.local
