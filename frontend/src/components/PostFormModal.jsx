@@ -105,10 +105,13 @@ export default function PostFormModal({
           marginBottom: 32,
           width: "100%",
           maxWidth: 500,
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           gap: 16,
           position: "relative",
+          maxHeight: "90vh",
+          overflowY: "auto",
         }}
       >
         <div
@@ -173,6 +176,7 @@ export default function PostFormModal({
             gap: 16,
             alignItems: "center",
             color: "var(--color-on-background, #222)",
+            flexWrap: "wrap",
           }}
         >
           <span>Quyền riêng tư:</span>

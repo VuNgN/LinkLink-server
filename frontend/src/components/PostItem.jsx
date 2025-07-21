@@ -1,15 +1,15 @@
 import React, { memo } from "react";
 
 const PostItem = memo(function PostItem({ post, onClick, showActions = true }) {
-  let imageUrl = "";
+  let imageUrls = [];
   if (
     Array.isArray(post.images) &&
     post.images.length > 0 &&
     post.images[0].file_path
   ) {
-    imageUrl = post.images[0].file_path;
+    imageUrls = post.images.map((img) => img.file_path);
   } else if (post.file_path || post.image_path) {
-    imageUrl = post.file_path || post.image_path;
+    imageUrls = [post.file_path || post.image_path];
   }
   let createdAt = "";
   if (post.created_at) {
@@ -18,7 +18,7 @@ const PostItem = memo(function PostItem({ post, onClick, showActions = true }) {
   }
   return (
     <div
-      onClick={onClick}
+      onClick={() => onClick(post)}
       style={{
         background: "var(--color-surface)",
         borderRadius: 12,
@@ -32,22 +32,74 @@ const PostItem = memo(function PostItem({ post, onClick, showActions = true }) {
         maxWidth: 600,
         cursor: "pointer",
         transition: "box-shadow 0.2s",
+        boxSizing: "border-box",
       }}
     >
-      <img
-        src={imageUrl}
-        alt={post.message}
-        style={{
-          width: "100%",
-          height: "auto",
-          borderRadius: 8,
-          marginBottom: 12,
-          objectFit: "cover",
-          aspectRatio: "4/3",
-          maxHeight: 400,
-        }}
-        loading="lazy"
-      />
+      {/* Image grid for up to 4 images */}
+      <div style={{
+        width: "100%",
+        display: "grid",
+        gridTemplateColumns: imageUrls.length > 1 ? "1fr 1fr" : "1fr",
+        gridTemplateRows: imageUrls.length > 2 ? "1fr 1fr" : "1fr",
+        gap: 6,
+        marginBottom: 12,
+        borderRadius: 8,
+        overflow: "hidden",
+        aspectRatio: imageUrls.length === 1 ? "4/3" : "1/1",
+        background: "#fafafa"
+      }}>
+        {imageUrls.slice(0, 4).map((url, idx) => (
+          <div key={url} style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            borderRadius: 8,
+            gridColumn: imageUrls.length === 3 && idx === 2 ? "1 / span 2" : undefined,
+            aspectRatio: imageUrls.length === 1 ? "4/3" : "1/1",
+            cursor: "pointer"
+          }}
+          onClick={e => {
+            e.stopPropagation();
+            onClick(post, idx);
+          }}
+          >
+            <img
+              src={url}
+              alt={post.message}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+                borderRadius: 8,
+                aspectRatio: imageUrls.length === 1 ? "4/3" : "1/1"
+              }}
+              loading="lazy"
+            />
+            {/* Overlay for more images */}
+            {idx === 3 && imageUrls.length > 4 && (
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                background: "rgba(0,0,0,0.45)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 32,
+                fontWeight: 700,
+                borderRadius: 8
+              }}>
+                +{imageUrls.length - 4}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
       <div
         style={{
           width: "100%",
