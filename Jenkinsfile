@@ -63,6 +63,24 @@ pipeline {
             }
         }
 
+        stage('Ensure Latest Master for Release') {
+            when {
+                expression {
+                    def ENV_TYPE = readFile('envtype.txt').trim()
+                    return ENV_TYPE == 'release'
+                }
+            }
+            steps {
+                script {
+                    sh '''
+                        git fetch origin master
+                        git checkout master
+                        git reset --hard origin/master
+                    '''
+                }
+            }
+        }
+
         stage('Prepare .env') {
             steps {
                 script {
