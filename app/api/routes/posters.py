@@ -34,7 +34,7 @@ router = APIRouter()
 )
 async def create_poster(
     message: str = Form(..., description="Message for the poster"),
-    image: UploadFile = File(..., description="Image file for the poster"),
+    images: List[UploadFile] = File(..., description="Image files for the poster"),
     privacy: str = Form(
         "private", description="Privacy of the post: public or private"
     ),
@@ -42,14 +42,6 @@ async def create_poster(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Create a new poster with image and message."""
-    # Save the image
-    upload_dir = "uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-    image_filename = f"{current_user.username}_{image.filename}"
-    image_path = os.path.join(upload_dir, image_filename)
-    with open(image_path, "wb") as buffer:
-        shutil.copyfileobj(image.file, buffer)
-
     # Create PosterModel
     poster = PosterModel(
         username=current_user.username,
@@ -60,25 +52,37 @@ async def create_poster(
     await db.commit()
     await db.refresh(poster)
 
-    # Create ImageModel and link to poster
-    image_model = ImageModel(
-        filename=image_filename,
-        original_filename=image.filename,
-        username=current_user.username,
-        file_path=image_path,
-        file_size=image.size,
-        content_type=image.content_type or "application/octet-stream",
-        poster_id=poster.id,
-    )
-    db.add(image_model)
+    # Save images and create ImageModel for each
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    image_models = []
+    for image in images:
+        image_filename = f"{current_user.username}_{image.filename}"
+        image_path = os.path.join(upload_dir, image_filename)
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+        image_model = ImageModel(
+            filename=image_filename,
+            original_filename=image.filename,
+            username=current_user.username,
+            file_path=image_path,
+            file_size=image.size,
+            content_type=image.content_type or "application/octet-stream",
+            poster_id=poster.id,
+        )
+        image_models.append(image_model)
+
+    db.add_all(image_models)
     await db.commit()
 
     poster_obj = Poster.from_orm(poster)
     poster_obj.images = [
         {
-            "filename": image_model.filename,
-            "file_path": to_public_path(image_model.file_path),
+            "filename": img.filename,
+            "file_path": to_public_path(img.file_path),
         }
+        for img in image_models
     ]
 
     # Notify all clients except the poster, only for public/community
@@ -189,8 +193,8 @@ async def get_posters(
 async def edit_poster(
     poster_id: int,
     message: str = Form(None, description="New message for the poster"),
-    image: UploadFile = File(
-        None, description="New image file for the poster (optional)"
+    images: List[UploadFile] = File(
+        None, description="New image files for the poster (optional)"
     ),
     privacy: str = Form(
         None, description="New privacy setting: public, community, or private"
@@ -200,24 +204,30 @@ async def edit_poster(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Edit an existing poster."""
-    image_content = None
-    image_filename = None
-    if image is not None:
-        image_content = await image.read()
-        image_filename = image.filename
+    image_updates = []
+    if images is not None:
+        for image in images:
+            image_content = await image.read()
+            image_filename = image.filename
+            image_updates.append(
+                {
+                    "content": image_content,
+                    "filename": image_filename,
+                    "content_type": image.content_type or "application/octet-stream",
+                }
+            )
 
     try:
         poster = await poster_service.edit_poster(
             poster_id=poster_id,
             username=current_user.username,
             message=message,
-            image_content=image_content,
-            image_filename=image_filename,
+            image_updates=image_updates,
             privacy=privacy,
         )
 
         # Handle image update if provided
-        if image_content is not None and image_filename is not None:
+        if image_updates:
             # Delete old images for this poster
             old_images_result = await db.execute(
                 select(ImageModel).where(ImageModel.poster_id == poster_id)
@@ -230,25 +240,26 @@ async def edit_poster(
                 # Delete from database
                 await db.delete(old_img)
 
-            # Create new image
+            # Create new images
             upload_dir = "uploads"
             os.makedirs(upload_dir, exist_ok=True)
-            new_image_filename = f"{current_user.username}_{image_filename}"
-            new_image_path = os.path.join(upload_dir, new_image_filename)
-            with open(new_image_path, "wb") as buffer:
-                buffer.write(image_content)
+            for update in image_updates:
+                new_image_filename = f"{current_user.username}_{update['filename']}"
+                new_image_path = os.path.join(upload_dir, new_image_filename)
+                with open(new_image_path, "wb") as buffer:
+                    buffer.write(update["content"])
 
-            # Create new ImageModel
-            new_image_model = ImageModel(
-                filename=new_image_filename,
-                original_filename=image_filename,
-                username=current_user.username,
-                file_path=new_image_path,
-                file_size=len(image_content),
-                content_type=image.content_type or "application/octet-stream",
-                poster_id=poster_id,
-            )
-            db.add(new_image_model)
+                # Create new ImageModel
+                new_image_model = ImageModel(
+                    filename=new_image_filename,
+                    original_filename=update["filename"],
+                    username=current_user.username,
+                    file_path=new_image_path,
+                    file_size=len(update["content"]),
+                    content_type=update["content_type"],
+                    poster_id=poster_id,
+                )
+                db.add(new_image_model)
             await db.commit()
 
         # Get updated poster with images
