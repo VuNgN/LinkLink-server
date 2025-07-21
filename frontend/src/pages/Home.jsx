@@ -19,6 +19,7 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false);
   const [hasNewPost, setHasNewPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [postToEdit, setPostToEdit] = useState(null);
@@ -56,6 +57,11 @@ export default function Home() {
       setShowDeleteConfirm(false);
       setPostToDelete(null);
     }
+  };
+
+  const handlePostClick = (post, imageIndex = 0) => {
+    setSelectedPost(post);
+    setSelectedImageIndex(imageIndex);
   };
 
   // Handle login
@@ -142,13 +148,14 @@ export default function Home() {
           <PostItem
             key={post.id}
             post={post}
-            onClick={() => setSelectedPost(post)}
+            onClick={handlePostClick}
           />
         ))}
         <Modal open={!!selectedPost} onClose={() => setSelectedPost(null)}>
           {selectedPost && (
             <PostDetail
               post={selectedPost}
+              initialImageIndex={selectedImageIndex}
               onEdit={
                 isAuthenticated ? () => handleEdit(selectedPost) : undefined
               }

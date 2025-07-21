@@ -9,8 +9,10 @@ export default function PostFormModal({
   post = null,
   mode = "create",
 }) {
-  const [formImage, setFormImage] = useState(null);
-  const [formImageUrl, setFormImageUrl] = useState(post ? post.image_path : "");
+  const [formImages, setFormImages] = useState([]);
+  const [formImageUrls, setFormImageUrls] = useState(
+    post ? post.images.map((img) => img.file_path) : [],
+  );
   const [formMessage, setFormMessage] = useState(post ? post.message : "");
   const [formPrivacy, setFormPrivacy] = useState(
     post ? post.privacy : "public",
@@ -22,31 +24,31 @@ export default function PostFormModal({
     if (post) {
       setFormMessage(post.message || "");
       setFormPrivacy(post.privacy || "public");
-      setFormImageUrl(post.image_path || "");
-      setFormImage(null);
+      setFormImageUrls(post.images ? post.images.map((img) => img.file_path) : []);
+      setFormImages([]);
     } else {
       setFormMessage("");
       setFormPrivacy("public");
-      setFormImageUrl("");
-      setFormImage(null);
+      setFormImageUrls([]);
+      setFormImages([]);
     }
   }, [post, open]);
 
   function handleImageChange(e) {
-    const file = e.target.files[0];
-    setFormImage(file);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setFormImageUrl(url);
+    const files = Array.from(e.target.files);
+    setFormImages(files);
+    if (files.length > 0) {
+      const urls = files.map((file) => URL.createObjectURL(file));
+      setFormImageUrls(urls);
     } else {
-      setFormImageUrl(post ? post.image_path : "");
+      setFormImageUrls(post ? post.images.map((img) => img.file_path) : []);
     }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
-    if (mode === "create" && !formImage) {
+    if (mode === "create" && formImages.length === 0) {
       setFormError("Vui lòng chọn ảnh!");
       return;
     }
@@ -57,7 +59,11 @@ export default function PostFormModal({
     setFormLoading(true);
     try {
       const formData = new FormData();
-      if (formImage) formData.append("image", formImage);
+      if (formImages.length > 0) {
+        formImages.forEach((image) => {
+          formData.append("images", image);
+        });
+      }
       formData.append("message", formMessage);
       formData.append("privacy", formPrivacy);
       let res;
@@ -73,8 +79,8 @@ export default function PostFormModal({
             (mode === "edit" ? "Lỗi cập nhật bài viết" : "Lỗi đăng bài"),
         );
       }
-      setFormImage(null);
-      setFormImageUrl("");
+      setFormImages([]);
+      setFormImageUrls([]);
       setFormMessage("");
       setFormPrivacy("private");
       setFormLoading(false);
@@ -99,10 +105,13 @@ export default function PostFormModal({
           marginBottom: 32,
           width: "100%",
           maxWidth: 500,
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           gap: 16,
           position: "relative",
+          maxHeight: "90vh",
+          overflowY: "auto",
         }}
       >
         <div
@@ -120,18 +129,24 @@ export default function PostFormModal({
           accept="image/*"
           onChange={handleImageChange}
           disabled={formLoading}
+          multiple
         />
-        {formImageUrl && (
-          <img
-            src={formImageUrl}
-            alt="Preview"
-            style={{
-              width: "100%",
-              maxHeight: 300,
-              objectFit: "cover",
-              borderRadius: 8,
-            }}
-          />
+        {formImageUrls.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {formImageUrls.map((url, index) => (
+              <img
+                key={index}
+                src={url}
+                alt={`Preview ${index}`}
+                style={{
+                  width: 100,
+                  height: 100,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                }}
+              />
+            ))}
+          </div>
         )}
         <textarea
           placeholder="Nhập lời nhắn..."
@@ -161,6 +176,7 @@ export default function PostFormModal({
             gap: 16,
             alignItems: "center",
             color: "var(--color-on-background, #222)",
+            flexWrap: "wrap",
           }}
         >
           <span>Quyền riêng tư:</span>

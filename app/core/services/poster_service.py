@@ -28,8 +28,7 @@ class PosterService:
         poster_id: int,
         username: str,
         message: Optional[str] = None,
-        image_content: Optional[bytes] = None,
-        image_filename: Optional[str] = None,
+        image_updates: Optional[list] = None,
         privacy: Optional[str] = None,
     ):
         poster = await self.poster_repo.get_by_id(poster_id)
@@ -49,7 +48,7 @@ class PosterService:
             poster.privacy = privacy
 
         # Update image if provided
-        if image_content is not None and image_filename is not None:
+        if image_updates is not None:
             # Note: Image handling is now done in the route layer
             # since images are stored separately in the database
             pass
