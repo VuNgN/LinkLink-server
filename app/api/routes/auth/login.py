@@ -81,6 +81,15 @@ async def login(
     """
     try:
         token_data = await auth_service.login_user(credentials)
+        # Set refresh token as HttpOnly cookie
+        response.set_cookie(
+            key="refresh_token",
+            value=token_data["refresh_token"],
+            httponly=True,
+            secure=True,  # Only if using HTTPS
+            samesite="lax",  # or "none" if cross-site and using HTTPS
+            path="/api/v1/auth/refresh",
+        )
         # Convert expires_at datetime to expires_in seconds
         expires_in = int(
             (token_data["expires_at"] - datetime.now(timezone.utc)).total_seconds()
@@ -157,14 +166,21 @@ async def refresh_token(
     auth = request.headers.get("Authorization") or ""
     scheme, param = get_authorization_scheme_param(auth)
 
-    if not auth or scheme.lower() != "bearer" or not param:
+    refresh_token = None
+    if auth and scheme.lower() == "bearer" and param:
+        refresh_token = param
+    else:
+        # Try to get from cookie
+        refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header",
+            detail="No refresh token provided",
         )
 
     try:
-        token_data = await auth_service.refresh_access_token(param)
+        token_data = await auth_service.refresh_access_token(refresh_token)
         # Convert expires_at datetime to expires_in seconds
         expires_in = int(
             (token_data["expires_at"] - datetime.now(timezone.utc)).total_seconds()

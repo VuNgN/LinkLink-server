@@ -64,7 +64,7 @@ check_docker() {
     if ! docker-compose ps | grep -q "Up"; then
         print_warning "Docker containers are not running!"
         print_status "Starting Docker containers..."
-        ./docker-manage.sh start
+    #     ./scripts/docker-manage.sh start
         sleep 5
     fi
 }

@@ -1,9 +1,10 @@
-import sys
 import getpass
-import bcrypt
 import os
-from dotenv import load_dotenv
+import sys
+
+import bcrypt
 import psycopg2
+from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
 load_dotenv()
@@ -27,11 +28,14 @@ def create_admin():
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO users (username, email, hashed_password, is_active, is_admin, status, created_at, updated_at)
                 VALUES (%s, %s, %s, TRUE, TRUE, 'approved', NOW(), NOW())
                 ON CONFLICT (username) DO NOTHING
-            """, (username, email, hashed))
+            """,
+                (username, email, hashed),
+            )
             conn.commit()
     print(f"Admin user '{username}' created (or already exists).")
 
@@ -39,21 +43,27 @@ def create_admin():
 def list_admins():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT username, email, is_active, status, created_at FROM users WHERE is_admin = TRUE")
+            cur.execute(
+                "SELECT username, email, is_active, status, created_at FROM users WHERE is_admin = TRUE"
+            )
             admins = cur.fetchall()
             if not admins:
                 print("No admin users found.")
                 return
             print("Admin users:")
             for a in admins:
-                print(f"- {a['username']} | {a['email']} | active: {a['is_active']} | status: {a['status']} | created: {a['created_at']}")
+                print(
+                    f"- {a['username']} | {a['email']} | active: {a['is_active']} | status: {a['status']} | created: {a['created_at']}"
+                )
 
 
 def remove_admin():
     username = input("Enter admin username to remove: ").strip()
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM users WHERE username = %s AND is_admin = TRUE", (username,))
+            cur.execute(
+                "DELETE FROM users WHERE username = %s AND is_admin = TRUE", (username,)
+            )
             if cur.rowcount:
                 print(f"Admin user '{username}' removed.")
             else:

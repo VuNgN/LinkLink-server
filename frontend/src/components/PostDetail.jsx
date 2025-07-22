@@ -39,18 +39,16 @@ function PostDetail({ post, onEdit, onDelete, initialImageIndex = 0 }) {
   const isOwner = post.username === currentUsername;
 
   return (
-    <div
-      style={{
-        maxHeight: "90vh",
-        overflow: "auto",
-        padding: "32px 0",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
+    <>
+      <style>{`
+        .hide-scrollbar {
+          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: none;    /* Firefox */
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;            /* Chrome, Safari, Opera */
+        }
+      `}</style>
       {/* Carousel for images */}
       {imageUrls.length > 1 ? (
         <div style={{
@@ -255,24 +253,40 @@ function PostDetail({ post, onEdit, onDelete, initialImageIndex = 0 }) {
           marginTop: 24,
         }}
       >
-        {/* Download first image only for now */}
-        <a
-          href={imageUrls[0]}
-          download
+        {/* Download all images button */}
+        <button
+          type="button"
           style={{
-            display: "inline-block",
             background: "var(--color-primary,#7C4DFF)",
             color: "#fff",
             borderRadius: 20,
             padding: "10px 28px",
-            textDecoration: "none",
             fontWeight: 700,
+            cursor: "pointer",
             fontSize: 18,
             boxShadow: "0 2px 8px #7c4dff22",
+            marginRight: 8,
+          }}
+          onClick={() => {
+            imageUrls.forEach((url, idx) => {
+              // Add a small delay between each download to prevent browser blocking
+              setTimeout(() => {
+                const link = document.createElement("a");
+                link.href = url;
+                // Try to extract filename from URL, fallback to 'imageX.jpg'
+                const urlParts = url.split("/");
+                const filename =
+                  urlParts[urlParts.length - 1] || `image${idx + 1}.jpg`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }, idx * 300); // 300ms delay between each download
+            });
           }}
         >
-          ⬇️ Tải ảnh xuống
-        </a>
+          ⬇️ Tải tất cả ảnh
+        </button>
         <button
           type="button"
           style={{
@@ -300,7 +314,7 @@ function PostDetail({ post, onEdit, onDelete, initialImageIndex = 0 }) {
           <span>Chia sẻ</span>
         </button>
       </div>
-    </div>
+    </>
   );
 }
 

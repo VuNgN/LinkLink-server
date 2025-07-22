@@ -147,6 +147,7 @@ export default function PostDetailPage() {
 
   return (
     <div
+      className="hide-scrollbar"
       style={{
         minHeight: "100vh",
         background: "var(--color-background, #fff)",
